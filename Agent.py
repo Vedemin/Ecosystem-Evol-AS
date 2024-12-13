@@ -2,6 +2,8 @@ import numpy as np
 from Utils import *
 
 default_genome = {
+  "species": "h1", # Present: h1, c1, np - Nile Perch
+  "lifespan": 5000,
   "speed": 1.0,
   "health": 100.0,
   "stomach_size": 100.0,
@@ -16,50 +18,20 @@ default_genome = {
   "depth_tolerance_range": 15.0,  # Range above and below the mean depth
 }
 
-def CalculateMovementCost(genome):
-    # Base movement cost
-    base_cost = -0.1
-
-    # Weight factors for all stats
-    weights = {
-        "speed": 0.4,           # Significant impact due to faster movement
-        "health": 0.004,        # Slight impact
-        "stomach_size": 0.001,  # Minimal impact
-        "armor": 0.05,          # Medium impact
-        "bite_damage": 0.003,   # Carnivores with high bite damage are slightly costlier
-        "eyesight_range": 0.002,  # Slight impact
-        "feed_range": 0.002,    # Slight impact
-        "bite_range": 0.002,    # Slight impact
-        "memory": 0.001,        # Very minimal impact for larger memory capacity
-    }
-
-    # Calculate additional cost from genome
-    additional_cost = (
-        genome["speed"] * weights["speed"] +
-        genome["health"] * weights["health"] +
-        genome["stomach_size"] * weights["stomach_size"] +
-        genome["armor"] * weights["armor"] +
-        genome["bite_damage"] * weights["bite_damage"] +
-        genome["eyesight_range"] * weights["eyesight_range"] +
-        genome["feed_range"] * weights["feed_range"] +
-        genome["bite_range"] * weights["bite_range"] +
-        genome["memory"] * weights["memory"]
-    )
-
-    # Total movement cost, clamped to ensure it doesn't drop below -10
-    movement_cost = max(base_cost - additional_cost, -10.0)
-    return movement_cost
-
 class Agent():
-  def __init__(self, name, position, genome=default_genome, debug=False):
+  def __init__(self, name, position, genome=default_genome, life_start_point=0, debug=False):
     self.debug = debug
     if self.debug:
       print(genome)
     self.name = name
     self.stats = genome
-    self.speed = genome["speed"]
     self.health = self.stats["health"]
-    self.food = self.stats["stomach_size"]
+    self.lifespan = np.random.normal(self.stats["lifespan"], 0.15 * self.stats["lifespan"])
+    self.life = np.round(life_start_point * self.lifespan)
+    self.life_factor = self.LifeFactor()
+    self.speed = self.stats["speed"] * self.life_factor
+    self.stomach_size = self.stats["stomach_size"] * self.life_factor
+    self.food = self.stomach_size
     self.type = self.stats["type"]
     self.depth_min = genome["depth_point"] - genome["depth_tolerance_range"]
     self.depth_max = genome["depth_point"] + genome["depth_tolerance_range"]
@@ -77,29 +49,27 @@ class Agent():
     self.memory = 0
     self.egg_permitted = 0
     self.patrolPoint = [-1, -1, -1]
-    self.lifespan = np.random.randint(1000, 10000)
-    self.life = 0
 
   def LifeFactor(self):
     if self.life >= self.lifespan:
-      return -1.0
+      return 0
     
     # Calculate the thresholds
     t1 = 0.2 * self.lifespan  # 20% of X
     t2 = 0.6 * self.lifespan  # 60% of X
 
     if 0 <= self.life < t1:
-        # Linear increase from 0.5 to 1.0
         return 0.5 + (0.5 * (self.life / t1))
     elif t1 <= self.life < t2:
-        # Constant value 1.0
         return 1.0
     elif t2 <= self.life < self.lifespan:
-        # Linear decrease from 1.0 to 0.1
         return 1.0 - (0.9 * ((self.life - t2) / (self.lifespan - t2)))
-    return -1.0
+    return 0
 
   def Activate(self, env):
+    self.life_factor = self.LifeFactor()
+    self.speed = self.stats["speed"] * self.life_factor
+    self.stomach_size = self.stats["stomach_size"] * self.life_factor
     if self.debug:
       print(f"Activate {self.name}")
     self.CalculateDistances(env)
@@ -110,12 +80,13 @@ class Agent():
 
   def CalculateDistances(self, env):
     """Calculate distances to other agents and food items with explanations for target selection."""
+    eyesight_range = self.stats["eyesight_range"] * self.life_factor
     
     # Calculate distances and visibility to other agents
     for name, agent in env.agents.items():
         if name == self.name:
             continue  # Skip self
-        visible, distance = RayCast(env, self.x, self.y, self.depth, agent.x, agent.y, agent.depth, self.stats["eyesight_range"])
+        visible, distance = RayCast(env, self.x, self.y, self.depth, agent.x, agent.y, agent.depth, eyesight_range)
         
         # Record distances and visibility status for each agent
         self.distances[agent.name] = {
@@ -147,72 +118,37 @@ class Agent():
         self.closest_food_distance = 100000  # Effectively "infinite" distance
         self.closest_food = [self.closest_food_distance, self.closest_food_distance, self.closest_food_distance]
 
-    # Find the closest visible food item
-    for food in env.foods:
-        visible, distance = RayCast(env, self.x, self.y, self.depth, food[0], food[1], food[2], self.stats["eyesight_range"])
-        if visible and distance < self.closest_food_distance:
-            if self.debug:
-                print(f"[{self.name}] New food target selected at {food} with distance {distance}.")
-            self.closest_food_distance = distance
-            self.closest_food = food
-            self.memory = self.stats["memory"]  # Reset memory when new food is visible
-    if self.closest_food_distance > self.stats["eyesight_range"]:
-        # Food is no longer visible but was remembered
-        if self.debug:
-            print(f"[{self.name}] Closest food {self.closest_food} is out of eyesight range. Reducing memory {self.memory}.")
-        self.memory = max(0, self.memory - 1)  # Decrease memory but ensure it doesn't drop below 0
-        if self.memory == 0:
-            if self.debug:
-                print(f"[{self.name}] Memory depleted. Forgetting food.")
-            self.closest_food_distance = 100000
-            self.closest_food = [100000, 100000, 100000]
-    #     if visible and self.closest_food_distance > distance:
-    #         if self.debug:
-    #           print(f"[{self.name}] New food target selected at {food} with distance {distance}.")
-    #         self.closest_food_distance = distance
-    #         self.closest_food = food
-    #         self.memory = self.stats["memory"]
-    
-    # # Decrease memory if the closest food is out of eyesight range
-    # if self.closest_food_distance > self.stats["eyesight_range"]:
-    #     if self.debug:
-    #       print(f"[{self.name}] Closest food {self.closest_food} is out of eyesight range. Reducing memory {self.memory}.")
-    #     self.memory -= 1
-  
-  def VectorMagnitude(self, vector):
-    return np.sqrt(vector[0] ** 2 + vector[1] ** 2 + vector[2] ** 2)
+    if self.stats["type"] == "herbivore":
+      # Find the closest visible food item
+      for food in env.foods:
+          visible, distance = RayCast(env, self.x, self.y, self.depth, food[0], food[1], food[2], eyesight_range)
+          if visible and distance < self.closest_food_distance:
+              if self.debug:
+                  print(f"[{self.name}] New food target selected at {food} with distance {distance}.")
+              self.closest_food_distance = distance
+              self.closest_food = food
+              self.memory = int(np.round(self.stats["memory"] * self.life_factor))  # Reset memory when new food is visible
 
-  def NormalizedVector(self, vector):
-    mag = self.VectorMagnitude(vector)
-    return [
-      vector[0] / mag,
-      vector[1] / mag,
-      vector[2] / mag
-    ]
+      if self.closest_food_distance > eyesight_range:
+          # Food is no longer visible but was remembered
+          if self.debug:
+              print(f"[{self.name}] Closest food {self.closest_food} is out of eyesight range. Reducing memory {self.memory}.")
+          self.memory = max(0, self.memory - 1)  # Decrease memory but ensure it doesn't drop below 0
+          if self.memory == 0:
+              if self.debug:
+                  print(f"[{self.name}] Memory depleted. Forgetting food.")
+              self.closest_food_distance = 100000
+              self.closest_food = [100000, 100000, 100000]
   
   def MovementVector(self, vector):
-    vector_mag = self.VectorMagnitude(vector)
+    vector_mag = VectorMagnitude(vector)
     if vector_mag <= self.speed:
       return vector
-    result = self.NormalizedVector(vector)
+    result = NormalizedVector(vector)
     return [
       result[0] * self.speed,
       result[1] * self.speed,
       result[2] * self.speed
-    ]
-
-  def GetFoodVector(self, target):
-    return [
-      target[0] - self.x,
-      target[1] - self.y,
-      target[2] - self.depth,
-    ]
-  
-  def GetAgentVector(self, target):
-    return [
-      target.x - self.x,
-      target.y - self.y,
-      target.depth - self.depth,
     ]
 
   def SelectAction(self, env):
@@ -227,29 +163,24 @@ class Agent():
   def HerbivoreBehavior(self, env):
       # print(f"[{self.name}] Choosing Herbivore Behavior: Searching for food.")
       """Define the behavior of an herbivore agent."""
-      if self.closest_food_distance < self.stats["feed_range"]:
+      if self.closest_food_distance < self.stats["feed_range"] * self.life_factor:
           if self.debug:
             print(f"[{self.name}] Eating food: Food is within feeding range ({self.closest_food_distance}).")
           self.Eat(env)
-      elif self.closest_food_distance < self.stats["eyesight_range"]:
+      elif self.closest_food_distance < self.stats["eyesight_range"] * self.life_factor:
           if self.debug:
             print(f"[{self.name}] Moving towards food: Food is within eyesight range ({self.closest_food_distance}).")
-          self.Move(self.MovementVector(self.GetFoodVector(self.closest_food)), env)
+          self.Move(self.MovementVector(GetFoodVector(self, self.closest_food)), env)
       elif self.memory > 0 and self.closest_food_distance < 90000 :
           if self.debug:
             print(f"[{self.name}] Recalling food location from memory: Moving to remembered food at {self.rememberedFood}.")
           self.memory -= 1
-          up_and_towards = self.GetFoodVector(self.rememberedFood)
+          up_and_towards = GetFoodVector(self, self.rememberedFood)
           up_and_towards[2] = self.speed * 2
           self.Move(self.MovementVector(up_and_towards), env)
       elif self.patrolPoint == [-1, -1, -1]:
           if self.debug:
             print(f"[{self.name}] No food found: Assigning new patrol point.")
-          # self.patrolPoint = [
-          #     env.gridRInt("x"),
-          #     env.gridRInt("y"),
-          #     float(env.params["min_depth"] - 3)
-          # ]
           seabed_depth = env.map[int(self.x), int(self.y)]
           target_depth = max(self.depth_min, min(self.depth_max, seabed_depth - 3))
           self.patrolPoint = [
@@ -257,7 +188,7 @@ class Agent():
               env.gridRInt("y"),
               target_depth
           ]
-          self.Move(self.MovementVector(self.GetFoodVector(self.patrolPoint)), env)
+          self.Move(self.MovementVector(GetFoodVector(self, self.patrolPoint)), env)
       else:
           distToPatrol = GetDistance(self.x, self.y, self.depth, self.patrolPoint[0], self.patrolPoint[1], self.patrolPoint[2])
           if distToPatrol <= 1:
@@ -271,7 +202,7 @@ class Agent():
           else:
             if self.debug:
               print(f"[{self.name}] Patrolling to current patrol point at {self.patrolPoint}.")
-            self.Move(self.MovementVector(self.GetFoodVector(self.patrolPoint)), env)
+            self.Move(self.MovementVector(GetFoodVector(self, self.patrolPoint)), env)
 
   def BreedingBehavior(self, env):
       """Define the behavior for breeding."""
@@ -281,8 +212,8 @@ class Agent():
           if self.debug:
             print(f"[{self.name}] Moving towards a visible mate: {self.possible_mate}.")
           mate = env.agents[self.possible_mate]
-          self.Move(self.MovementVector(self.GetAgentVector(mate)), env)
-          if self.VectorMagnitude(self.GetAgentVector(mate)) < 3:
+          self.Move(self.MovementVector(GetAgentVector(self, mate)), env)
+          if VectorMagnitude(GetAgentVector(self, mate)) < 3:
               if self.debug:
                 print(f"[{self.name}] Close to mate: Initiating mating process.")
               self.Mate(env, mate)
@@ -326,8 +257,8 @@ class Agent():
 
   def Eat(self, env):
     self.food += env.params["food_value"]
-    if self.food > self.stats["stomach_size"]:
-      self.food = self.stats["stomach_size"]
+    if self.food > self.stomach_size:
+      self.food = self.stomach_size
     env.foods.remove(self.closest_food)
     env.generateNewFood()
   
@@ -351,11 +282,11 @@ class Agent():
 
   def CheckVitals(self, env):
     if self.health <= 0:
-      # Death code
       self.Die(env)
     if self.food <= 0:
-      # No food code
       self.Die(env)
+    if self.life > self.lifespan:
+       self.Die(env)
   
   def Die(self, env):
     if self.debug:
@@ -363,7 +294,7 @@ class Agent():
     env.KillAgent(self.name)
   
   def IsBreeding(self, env):
-    if self.egg_permitted >= env.egg_incubation_time and self.food >= self.stats["stomach_size"] / 2:
+    if self.egg_permitted >= self.lifespan * 0.3 and self.food >= self.stomach_size / 2:
       return True
     return False
     
@@ -380,7 +311,7 @@ class Agent():
         if np.random.random() < 0.5:
           newGenome[gene] = x1
         else:
-          newGenome[gene] = x2
+          newGenome[gene] = partner.stats[gene]
         continue
       
       # Convert integer to float for processing
@@ -432,96 +363,3 @@ class Agent():
         newGenome[gene] = max(new_value, min_allowed)
     
     return newGenome
-  
-
-# def CalculateDistances(self, env):
-  #   for name, agent in env.agents.items():
-  #     if name == self.name:
-  #       continue
-  #     visible, distance = RayCast(env, self.x, self.y, self.depth, agent.x, agent.y, agent.depth, self.stats["eyesight_range"])
-  #     self.distances[agent.name] = {
-  #       "distance": distance,
-  #       "visible": visible
-  #     }
-  #     visible_agents = {name: data for name, data in self.distances.items() if data["visible"]}
-  #     self.sorted_agents = sorted(visible_agents.keys(), key=lambda name: visible_agents[name]["distance"])
-  #     if self.IsBreeding(env):
-  #       self.possible_mate = next((agent for agent in self.sorted_agents if agent in env.agentNames and env.agents[agent].IsBreeding(env)), None)
-    
-  #   if self.memory <= 0 or self.closest_food not in env.foods:
-  #     self.closest_food_distance = 100000
-  #     self.closest_food = [self.closest_food_distance, self.closest_food_distance, self.closest_food_distance]
-
-  #   for food in env.foods:
-  #     visible, distance = RayCast(env, self.x, self.y, self.depth, food[0], food[1], food[2], self.stats["eyesight_range"])
-  #     if visible and self.closest_food_distance > distance:
-  #       self.closest_food_distance = distance
-  #       self.closest_food = food
-  #   if self.closest_food_distance > self.stats["eyesight_range"]:
-  #     self.memory -= 1
-
-  # def SelectAction(self, env):
-  #   if self.IsBreeding(env):
-  #     self.BreedingBehavior(env)
-  #   else:
-  #     self.HerbivoreBehavior(env)
-  #   self.CheckVitals(env)
-
-  # def HerbivoreBehavior(self, env):
-  #   if self.closest_food_distance < self.stats["feed_range"]:
-  #     # print("Eat")
-  #     self.Eat(env)
-  #   elif self.closest_food_distance < self.stats["eyesight_range"]:
-  #     # print("Move to food", self.GetFoodVector(self.closestFood))
-  #     self.Move(self.MovementVector(self.GetFoodVector(self.closest_food)), env)
-  #   elif self.memory > 0:
-  #     self.memory -= 1
-  #     up_and_towards = self.GetFoodVector(self.rememberedFood)
-  #     up_and_towards[2] = self.speed * 2
-  #     self.Move(self.MovementVector(up_and_towards), env)
-  #   elif self.patrolPoint == [-1, -1, -1]:
-  #     self.patrolPoint = [
-  #       env.gridRInt("x"),
-  #       env.gridRInt("y"),
-  #       float(env.params["min_depth"] - 3)
-  #     ]
-  #     # print("No food found, moving to new patrol point (previous unknown)", self.GetFoodVector(self.patrolPoint))
-  #     self.Move(self.MovementVector(self.GetFoodVector(self.patrolPoint)), env)
-  #   else:
-  #     distToPatrol = GetDistance(self.x,
-  #                               self.y,
-  #                               self.depth,
-  #                               self.patrolPoint[0],
-  #                               self.patrolPoint[1],
-  #                               self.patrolPoint[2])
-  #     if distToPatrol <= 1:
-  #       self.patrolPoint = [
-  #         env.gridRInt("x"),
-  #         env.gridRInt("y"),
-  #         float(env.params["min_depth"] - 3)
-  #       ]
-  #       # print("No food found, moving to new patrol point (previous reached)", self.GetFoodVector(self.patrolPoint))
-  #     # else:
-  #       # print("No food found, moving to known patrol point", self.GetFoodVector(self.patrolPoint))
-  #     self.Move(self.MovementVector(self.GetFoodVector(self.patrolPoint)), env)
-
-  # def BreedingBehavior(self, env):
-  #   # Check if a possible mate is visible
-  #   if self.possible_mate is not None:
-  #     # Move towards the mate
-  #     mate = env.agents[self.possible_mate]
-  #     self.Move(self.MovementVector(self.GetAgentVector(mate)), env)
-  #     if self.VectorMagnitude(self.GetAgentVector(mate)) < 3:
-  #       self.Mate(env, mate)
-  #   else:
-  #     # No mate visible, move randomly or patrol while searching
-  #     self.memory -= 1  # Reduce memory since no mate was found
-  #     if self.patrolPoint == [-1, -1, -1]:
-  #       self.patrolPoint = [
-  #         env.gridRInt("x"),
-  #         env.gridRInt("y"),
-  #         float(env.params["min_depth"] - 3)
-  #       ]
-  #     self.Move(self.MovementVector(self.GetFoodVector(self.patrolPoint)), env)
-  
-  

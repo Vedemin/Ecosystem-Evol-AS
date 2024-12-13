@@ -2,6 +2,7 @@ import numpy as np
 import random
 from copy import copy
 import cv2
+import colorsys
 from Utils import *
 from Agent import Agent
 
@@ -72,6 +73,7 @@ class Ecosystem():
         )
         self.cross = np.sqrt(
             self.mapsize[0] ** 2 + self.mapsize[1] ** 2 + self.max_depth ** 2)
+        self.depth_partition_precision = 10  # Default precision value
 
         self.possible_agents = [f"agent_{i}" for i in range(
             self.params["starting_population"])]
@@ -79,6 +81,11 @@ class Ecosystem():
         self.egg_incubation_time = self.params["egg_incubation_time"]
         self.agents = {}
         self.foods = []
+        self.agentColors = {
+            "h1": 90,
+            "p1": 0,
+            "np": 150
+        }
 
         self.timestep = 0  # Resets the timesteps
 
@@ -97,8 +104,14 @@ class Ecosystem():
         image = self.toImage((400, 400))
         scale_x = 400 / self.mapsize[0]
         scale_y = 400 / self.mapsize[1]
-        color = (0, 0, 255)
         for agent in self.agentNames:
+            ag = self.agents[agent]
+            agent_rgb = hsv2rgb(
+                    self.agentColors[ag.stats["species"]] / 180,
+                    1,
+                    0.25 + (1 - ag.life / ag.lifespan) * 0.75
+                )
+            color = (agent_rgb[2], agent_rgb[1], agent_rgb[0])
             org = (int(self.agents[agent].y * scale_y),
                    int(self.agents[agent].x * scale_x - 10))
             image = cv2.putText(image, str(int(self.agents[agent].depth)), org, cv2.FONT_HERSHEY_SIMPLEX,
@@ -107,7 +120,6 @@ class Ecosystem():
         cv2.waitKey(1)
 
     def toImage(self, window_size):  # Converts the map to a ready to display image
-        agent_color = [0, 0, 255]
         food_color = [0, 255, 0]
 
         img = cv2.bitwise_not(self.display_map)
@@ -119,13 +131,17 @@ class Ecosystem():
             img[int(food[0])][int(food[1])][2] = food_color[2]
 
         for agent in self.agentNames:
-            a_x = self.agents[agent].x
-            a_y = self.agents[agent].y
-            a_d = self.agents[agent].depth
-            color_factor = 0.25 + (1 - (a_d / self.max_depth)) * 0.75
-            img[int(a_x)][int(a_y)][0] = int(agent_color[0] * color_factor)
-            img[int(a_x)][int(a_y)][1] = int(agent_color[1] * color_factor)
-            img[int(a_x)][int(a_y)][2] = int(agent_color[2] * color_factor)
+            ag = self.agents[agent]
+            a_x = ag.x
+            a_y = ag.y
+            agent_rgb = hsv2rgb(
+                    self.agentColors[ag.stats["species"]] / 180,
+                    1,
+                    0.25 + (1 - ag.life / ag.lifespan) * 0.75
+                )
+            img[int(a_x)][int(a_y)][0] = agent_rgb[2]
+            img[int(a_x)][int(a_y)][1] = agent_rgb[1]
+            img[int(a_x)][int(a_y)][2] = agent_rgb[0]
 
         return cv2.resize(img, window_size, interpolation=cv2.INTER_NEAREST)
 
@@ -143,6 +159,48 @@ class Ecosystem():
  
     def getDistance(self, a_x, a_y, a_d, b_x, b_y, b_d):
         return np.sqrt((b_x - a_x) ** 2 + (b_y - a_y) ** 2 + (b_d - a_d) ** 2)
+    
+    def partitionDepthMap(self):
+        """Partition the map into chunks and compute min and max depth for each chunk."""
+        chunk_size = self.mapsize[0] // self.depth_partition_precision
+        self.chunk_min_depth = []
+        self.chunk_max_depth = []
+
+        for y in range(0, self.mapsize[1], chunk_size):
+            min_row = []
+            max_row = []
+            for x in range(0, self.mapsize[0], chunk_size):
+                chunk = self.map[y:y + chunk_size, x:x + chunk_size]
+                min_row.append(chunk.min())
+                max_row.append(chunk.max())
+            self.chunk_min_depth.append(min_row)
+            self.chunk_max_depth.append(max_row)
+
+    def getChunkDepth(self, x, y):
+        """Get the min and max depth of the chunk containing (x, y)."""
+        chunk_size = self.mapsize[0] // self.depth_partition_precision
+        chunk_x = x // chunk_size
+        chunk_y = y // chunk_size
+        if chunk_y < len(self.chunk_min_depth) and chunk_x < len(self.chunk_min_depth[0]):
+            return self.chunk_min_depth[chunk_y][chunk_x], self.chunk_max_depth[chunk_y][chunk_x]
+        else:
+            raise ValueError("Coordinates out of bounds!")
+
+    def getNeighboringChunkDepths(self, x, y):
+        """Get the min and max depths of neighboring chunks around the chunk containing (x, y)."""
+        chunk_size = self.mapsize[0] // self.depth_partition_precision
+        chunk_x = x // chunk_size
+        chunk_y = y // chunk_size
+
+        neighbors = []
+        for dy in [-1, 0, 1]:
+            for dx in [-1, 0, 1]:
+                nx, ny = chunk_x + dx, chunk_y + dy
+                if 0 <= ny < len(self.chunk_min_depth) and 0 <= nx < len(self.chunk_min_depth[0]):
+                    neighbors.append(
+                        (self.chunk_min_depth[ny][nx], self.chunk_max_depth[ny][nx])
+                    )
+        return neighbors
 
 ############################################################################################################
 
@@ -169,6 +227,8 @@ class Ecosystem():
         # Loads map file and converts it to a discrete terrain map
         scaling_factor = (self.max_depth - self.min_depth) / 255.0
         self.map = (self.display_map * scaling_factor + self.min_depth).astype(np.int16)
+        self.chunk_min_depth = []
+        self.chunk_max_depth = []
         print(self.map)
 
         self.generateNewFood()
@@ -184,13 +244,13 @@ class Ecosystem():
 ############################################################################################################
 
     # Check how much food is present and generate what is missing
-    def generateNewFood(self):
+    def generateNewFood(self, fullGrown=True):
         currentFood = len(self.foods)
         while currentFood < self.foodAmount:
             x = self.gridRInt("x")
             y = self.gridRInt("y")
-            depth_point = float(self.map[int(x)][int(y)]) - 5
-            self.foods.append([x, y, depth_point])
+            depth_point = float(self.map[int(x)][int(y)]) - 2
+            self.foods.append([x, y, depth_point, self.params["food_value"]])
             if self.debug:
                 print([x, y, depth_point], self.map[int(x)][int(y)])
             currentFood = len(self.foods)
@@ -198,17 +258,21 @@ class Ecosystem():
 ############################################################################################################
     
     def createNewAgent(self, x, y, d, agentID, is_new, genome=default_genome):
+        life_start = 0
         if is_new:
+            life_start = np.random.uniform(0.1, 0.5)
             self.agentNames.append(agentID)
-        self.agents[agentID] = Agent(agentID, [x, y, d], genome, debug=self.debug)
+        self.agents[agentID] = Agent(agentID, [x, y, d], genome, life_start_point=life_start, debug=self.debug)
 
     def RandomGenome(self):
         return {
+            "species": "h1", # Present: h1, c1, np - Nile Perch
             "speed": round(random.uniform(0.5, 3.0), 2),  # Speed between 0.5 and 3.0
             "health": round(random.uniform(50.0, 150.0), 1),  # Health between 50 and 150
             "stomach_size": round(random.uniform(50.0, 200.0), 1),  # Stomach size between 50 and 200
             "type": "herbivore",  # Randomly choose type
             "armor": max(round(random.uniform(0.0, 10.0) - 5, 2), 0),  # Armor between 0 and 10
+            "lifespan": 5000,
             "bite_damage": round(random.uniform(10.0, 60.0), 1),  # Bite damage between 10 and 60
             "eyesight_range": round(random.uniform(20.0, 150.0), 1),  # Eyesight range between 20 and 50
             "feed_range": round(random.uniform(2.0, 5.0), 1),  # Feed range between 2 and 5

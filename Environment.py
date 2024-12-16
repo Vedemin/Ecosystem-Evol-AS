@@ -67,7 +67,7 @@ class Ecosystem:
             },
             "n_p": {
                 "name": "Nile Perch",
-                "type": "omnivore",
+                "type": "carnivore",
                 "population": 10,
                 "color": 150,
             },
@@ -191,7 +191,8 @@ class Ecosystem:
     def stepper(self):
         agents = copy(self.agents)
         for name, agent in agents.items():
-            agent.Activate(self)
+            if name in self.agents:
+                agent.Activate(self)
         if self.render_mode == "human":
             self.render()
         self.timestep += 1

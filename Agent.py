@@ -93,7 +93,7 @@ class Agent:
 
         # Calculate distances and visibility to other agents
         for name, agent in env.agents.items():
-            if name == self.name:
+            if name == self.name or name not in env.agents:
                 continue  # Skip self
             visible, distance = RayCast(
                 env,
@@ -110,12 +110,18 @@ class Agent:
             self.distances[agent.name] = {"distance": distance, "visible": visible}
 
         # Filter visible agents and sort them by proximity
-        visible_agents = {
-            name: data for name, data in self.distances.items() if data["visible"]
+        self.visible_agents = {
+            name: data for name, data in self.distances.items() if data["visible"] and name in env.agents and env.agents[name].stats["species"] != self.stats["species"]
         }
         self.sorted_agents = sorted(
-            visible_agents.keys(), key=lambda name: visible_agents[name]["distance"]
+            self.visible_agents.keys(), key=lambda name: self.visible_agents[name]["distance"]
         )
+        if (len(self.sorted_agents) > 0):
+            self.closest_agent = env.agents[self.sorted_agents[0]]
+            self.closest_agent_distance = self.visible_agents[self.sorted_agents[0]]["distance"]
+        else:
+            self.closest_agent_distance = 100000
+            self.closest_agent = None
 
         # If the agent is ready for breeding, look for a potential mate
         if self.IsBreeding(env):
@@ -137,6 +143,31 @@ class Agent:
                         f"[{self.name}] No suitable mates visible within eyesight range."
                     )
 
+        if self.type == "carnivore":
+            if len(self.visible_agents) == 0:
+                if self.memory > 0 and self.remembered_agent:
+                    # Use memory to target the last seen agent
+                    if self.debug:
+                        print(
+                            f"[{self.name}] No visible agents. Moving to remembered agent {self.remembered_agent.name}."
+                        )
+                    self.memory -= 1
+                    up_and_towards = GetFoodVector(self, [
+                        self.remembered_agent.x,
+                        self.remembered_agent.y,
+                        self.remembered_agent.depth
+                    ])
+                    up_and_towards[2] = self.speed * 2
+                    self.Move(self.MovementVector(up_and_towards), env)
+                else:
+                    # Forget the agent if memory is depleted
+                    if self.debug:
+                        print(f"[{self.name}] Memory depleted. Forgetting agent.")
+                    self.closest_agent_distance = 100000
+                    self.closest_agent = None
+                    self.remembered_agent = None
+            return
+        
         # Reset closest food memory if memory is exhausted or the remembered food is no longer available
         if self.memory <= 0 or self.closest_food not in env.foods:
             if self.debug:
@@ -247,12 +278,12 @@ class Agent:
     def CarnivoreBehavior(self, env):
         """Define the behavior of a carnivore agent."""
         # Closest agent distance logic (carnivorous feeding logic)
-        if self.closest_agent_distance < self.stats["attack_range"] * self.life_factor:
+        if self.closest_agent_distance < self.stats["bite_range"] * self.life_factor:
             if self.debug:
                 print(
                     f"[{self.name}] Attacking agent: Agent is within attack range ({self.closest_agent_distance})."
                 )
-            self.Attack(env)
+            self.Attack(env, self.closest_agent)
         elif (
             self.closest_agent_distance
             < self.stats["eyesight_range"] * self.life_factor
@@ -284,8 +315,8 @@ class Agent:
                 print(
                     f"[{self.name}] Attacking agent: Agent is within attack range ({self.closest_agent_distance})."
                 )
-            self.Attack(env)
-        elif self.closest_food_distance < self.stats["feed_range"] * self.life_factor:
+            self.Attack(env, self.closest_agent)
+        elif self.closest_food_distance < self.stats["bite_range"] * self.life_factor:
             if self.debug:
                 print(
                     f"[{self.name}] Eating food: Food is within feeding range ({self.closest_food_distance})."
@@ -418,6 +449,9 @@ class Agent:
         env.foods.remove(self.closest_food)
         env.generateNewFood()
 
+    def Attack(self, env, target):
+        self.food += target.GetDamaged(env, self.stats["bite_damage"])
+
     def GetDamaged(self, env, amount):
         damage = amount - self.stats["armor"]
         if damage > 0:
@@ -451,6 +485,7 @@ class Agent:
     def Die(self, env):
         if self.debug:
             print("Agent death")
+        print("Agent death")
         env.KillAgent(self.name)
 
     def IsBreeding(self, env):

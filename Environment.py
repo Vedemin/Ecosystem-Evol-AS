@@ -46,7 +46,7 @@ class Ecosystem:
             "starting_population": 15,
             "food_value": 200,
             "movement_cost": -1,
-            "food_per_agent": 4,
+            "food_per_agent": 2,
             "max_timesteps": 200000,
             "movement_cost_factor": 1.0,
             "egg_incubation_time": 100,
@@ -56,19 +56,19 @@ class Ecosystem:
             "hb1": {
                 "name": "generic herbivore",
                 "type": "herbivore",
-                "population": 10,
+                "population": 30,
                 "color": 90,
             },
             "cv1": {
-                "name": "generic Carnivore",
+                "name": "generic harnivore",
                 "type": "carnivore",
-                "population": 10,
+                "population": 30,
                 "color": 0,
             },
             "n_p": {
                 "name": "Nile Perch",
                 "type": "carnivore",
-                "population": 10,
+                "population": 50,
                 "color": 150,
             },
         }

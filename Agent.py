@@ -231,11 +231,108 @@ class Agent:
     def SelectAction(self, env):
         """Determine the agent's action for the current timestep."""
         # print("Action selection")
-        if self.IsBreeding(env):
+        if self.IsThreatened(env):
+            self.RunAway(env)
+        elif self.IsBreeding(env):
             self.BreedingBehavior(env)
         else:
             self.AgentBehavior(env)
         self.CheckVitals(env)
+
+    def IsThreatened(self, env):
+        # TODO: If the agent has a carnivorous or omnivorous agent nearby from a different species - return true
+        # Use the existing agent dictionaries created in the CalculateDistances function
+        """Determine if the agent is threatened by nearby predators.
+        
+        Returns:
+            bool: True if a threat is detected, False otherwise
+        """
+        # Only herbivores can be threatened
+        if self.type != "herbivore":
+            return False
+            
+        # Check each visible agent
+        for agent_name in self.sorted_agents:
+            if agent_name not in env.agents:
+                continue
+                
+            threat = env.agents[agent_name]
+            # Agent is threatened if there's a carnivore or omnivore of a different species nearby
+            if (threat.type in ["carnivore", "omnivore"] and 
+                threat.stats["species"] != self.stats["species"] and
+                self.visible_agents[agent_name]["distance"] < self.stats["eyesight_range"] * self.life_factor):
+                return True
+                
+        return False
+
+    def RunAway(self, env):
+        # TODO: The agent should select a vector that brings it exactly away from the threat move there like in the movement functions.
+        # The vector must avoid clipping through walls or going outside of the map.
+        # The agent should move the maximum distance it can during this time.
+        # Use the existing agent dictionaries created in the CalculateDistances function
+        """Execute evasive maneuvers when threatened.
+        
+        The agent moves directly away from the nearest threat while staying within
+        map boundaries and avoiding obstacles.
+        """
+        # Find the closest threat
+        closest_threat = None
+        closest_distance = float('inf')
+        
+        for agent_name in self.sorted_agents:
+            if agent_name not in env.agents:
+                continue
+                
+            threat = env.agents[agent_name]
+            if threat.type in ["carnivore", "omnivore"] and threat.stats["species"] != self.stats["species"]:
+                distance = self.visible_agents[agent_name]["distance"]
+                if distance < closest_distance:
+                    closest_threat = threat
+                    closest_distance = distance
+        
+        if not closest_threat:
+            return
+            
+        # Calculate vector away from threat
+        away_vector = [
+            self.x - closest_threat.x,
+            self.y - closest_threat.y,
+            self.depth - closest_threat.depth
+        ]
+        
+        # Normalize the vector
+        magnitude = (away_vector[0]**2 + away_vector[1]**2 + away_vector[2]**2)**0.5
+        if magnitude > 0:
+            away_vector = [
+                away_vector[0] / magnitude * self.speed,
+                away_vector[1] / magnitude * self.speed,
+                away_vector[2] / magnitude * self.speed
+            ]
+        
+        # Calculate new position
+        new_x = self.x + away_vector[0]
+        new_y = self.y + away_vector[1]
+        new_depth = self.depth + away_vector[2]
+        
+        # Ensure new position is within map boundaries
+        new_x = max(0, min(new_x, env.params["mapsize"] - 1))
+        new_y = max(0, min(new_y, env.params["mapsize"] - 1))
+        
+        # Ensure new depth is within water column and agent's depth tolerance
+        seabed_depth = env.map[int(new_x), int(new_y)]
+        min_depth = max(env.params["min_depth"], self.depth_min)
+        max_depth = min(seabed_depth - 1, self.depth_max)
+        new_depth = max(min_depth, min(new_depth, max_depth))
+        
+        # Calculate final movement vector
+        final_vector = [
+            new_x - self.x,
+            new_y - self.y,
+            new_depth - self.depth
+        ]
+        
+        # Move the agent
+        self.Move(final_vector, env) 
 
     def HerbivoreBehavior(self, env):
         # print(f"[{self.name}] Choosing Herbivore Behavior: Searching for food.")
@@ -451,6 +548,8 @@ class Agent:
 
     def Attack(self, env, target):
         self.food += target.GetDamaged(env, self.stats["bite_damage"])
+        if self.food > self.stomach_size:
+            self.food = self.stomach_size
 
     def GetDamaged(self, env, amount):
         damage = amount - self.stats["armor"]

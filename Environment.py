@@ -3,8 +3,12 @@ import random
 from copy import copy
 import cv2
 import colorsys
+import pygame
 from Utils import *
 from Agent import Agent
+import matplotlib.pyplot as plt
+import io
+
 
 default_genome = {
     "speed": 1.0,
@@ -58,19 +62,58 @@ class Ecosystem:
                 "type": "herbivore",
                 "population": 30,
                 "color": 90,
+                "rgb": hsv2rgb(90, 1, 1),
+                "genome": {
+                    "speed": {"min": 1.0, "max": 2.5},  # Herbivores generally slower
+                    "health": {"min": 70.0, "max": 120.0},
+                    "stomach_size": {"min": 100.0, "max": 150.0},  # Moderate stomach size
+                    "armor": {"min": 0.0, "max": 5.0},  # Relatively low armor
+                    "bite_damage": {"min": 5.0, "max": 20.0},  # Low bite damage for herbivores
+                    "eyesight_range": {"min": 30.0, "max": 80.0},  # Moderate eyesight
+                    "feed_range": {"min": 3.0, "max": 4.0},  # Moderate feeding range
+                    "bite_range": {"min": 2.0, "max": 3.0},  # Moderate bite range
+                    "memory": {"min": 15, "max": 25},  # Moderate memory
+                    "depth_tolerance_range": {"min": 5, "max": 15}  # Moderate depth tolerance
+                }
             },
             "cv1": {
-                "name": "generic harnivore",
+                "name": "generic carnivore",
                 "type": "carnivore",
                 "population": 30,
                 "color": 0,
+                "rgb": hsv2rgb(0, 1, 1),
+                "genome": {
+                    "speed": {"min": 2.0, "max": 4.0},  # Carnivores generally faster
+                    "health": {"min": 60.0, "max": 110.0},
+                    "stomach_size": {"min": 80.0, "max": 120.0},  # Moderate stomach size
+                    "armor": {"min": 2.0, "max": 7.0},  # Moderate armor
+                    "bite_damage": {"min": 20.0, "max": 40.0},  # Higher bite damage for carnivores
+                    "eyesight_range": {"min": 40.0, "max": 100.0},  # Good eyesight
+                    "feed_range": {"min": 2.0, "max": 3.0},  # Moderate feeding range
+                    "bite_range": {"min": 2.0, "max": 4.0},  # Moderate bite range
+                    "memory": {"min": 10, "max": 20},  # Moderate memory
+                    "depth_tolerance_range": {"min": 5, "max": 15}  # Moderate depth tolerance
+                }
             },
-            "n_p": {
-                "name": "Nile Perch",
-                "type": "carnivore",
-                "population": 50,
-                "color": 150,
-            },
+            # "n_p": {
+            #     "name": "Nile Perch",
+            #     "type": "carnivore",
+            #     "population": 50,
+            #     "color": 150,
+            #     "rgb": hsv2rgb(150, 1, 1),
+            #     "genome": {
+            #         "speed": {"min": 3.0, "max": 5.0},  # Very fast
+            #         "health": {"min": 80.0, "max": 150.0},  # High health
+            #         "stomach_size": {"min": 120.0, "max": 200.0},  # Large stomach size
+            #         "armor": {"min": 5.0, "max": 10.0},  # High armor
+            #         "bite_damage": {"min": 40.0, "max": 70.0},  # Very high bite damage
+            #         "eyesight_range": {"min": 80.0, "max": 150.0},  # Excellent eyesight
+            #         "feed_range": {"min": 1.0, "max": 2.0},  # Short feeding range (aggressive)
+            #         "bite_range": {"min": 3.0, "max": 5.0},  # High bite range
+            #         "memory": {"min": 20, "max": 30},  # High memory
+            #         "depth_tolerance_range": {"min": 3, "max": 10}  # Narrow depth tolerance (specialization)
+            #     }
+            # },
         }
         for key in params:
             if key in self.params:
@@ -117,85 +160,212 @@ class Ecosystem:
         self.agents = {}
         self.foods = []
 
-        self.timestep = 0  # Resets the timesteps
+        self.timestep = 0
+        self.map_surface = None
+        if self.render_mode == "human":
+            pygame.init()
+            self.window_size = 800
+            self.screen = pygame.display.set_mode((self.window_size, self.window_size))
+            pygame.display.set_caption("Ecosystem Simulation")
+            self.clock = pygame.time.Clock()
+            # self.population_history = {species: [] for species in self.species.keys()}
+            # self.graph_surface = None
+
+            self.window_width = 800
+            self.simulation_height = 800
+            self.graph_height = 200
+            self.window_height = self.simulation_height + self.graph_height
+            self.graph_offset_y = self.simulation_height
+            self.screen = pygame.display.set_mode((self.window_width, self.window_height))
+        self.population_history = {species: [0] * 200 for species in self.species.keys()}
+        self.agent_history = []
+        self.finished = False
+        self.full_population_history = {species: [(0, 0)] for species in self.species.keys()}
+        self.max_history_length = 200
 
     def reset(self, seed=None, options=None):
         self.agentNames = copy(self.possible_agents)
         self.timestep = 0
         self.map = np.zeros(self.mapsize)
         self.foods = []
+        self.finished = False
         # This function starts the world:
         # loads the map from image,
         # spawns agents and generates food
         self.generateMap()
         return
 
-    def render(self):  # Simple OpenCV display of the environment
-        image = self.toImage((400, 400))
-        scale_x = 400 / self.mapsize[0]
-        scale_y = 400 / self.mapsize[1]
-        for agent in self.agentNames:
-            ag = self.agents[agent]
-            agent_rgb = hsv2rgb(
-                self.species[ag.stats["species"]]["color"] / 180,
-                1,
-                0.25 + (1 - ag.life / ag.lifespan) * 0.75,
-            )
-            color = (agent_rgb[2], agent_rgb[1], agent_rgb[0])
-            org = (
-                int(self.agents[agent].y * scale_y),
-                int(self.agents[agent].x * scale_x - 10),
-            )
-            image = cv2.putText(
-                image,
-                str(int(self.agents[agent].depth)),
-                org,
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                color,
-                2,
-            )
-        cv2.imshow("map", image)
-        cv2.waitKey(1)
+    def render(self):
+        self.screen.fill((0, 0, 0))
+        if self.map_surface is None:
+            self.map_surface = pygame.Surface(self.mapsize)
+            
+            # Ensure display_map is in the correct format
+            if len(self.display_map.shape) == 2:  # Grayscale map
+                display_map_rgb = np.stack([self.display_map] * 3, axis=-1)  # Convert to RGB
+            elif len(self.display_map.shape) == 3 and self.display_map.shape[2] == 3:
+                display_map_rgb = self.display_map  # Already in RGB
+            else:
+                raise ValueError("Unexpected shape for display_map: " + str(self.display_map.shape))
 
-    def toImage(self, window_size):  # Converts the map to a ready to display image
-        food_color = [0, 255, 0]
+            display_map_uint8 = display_map_rgb.astype(np.uint8)
+            pygame.surfarray.blit_array(self.map_surface, display_map_uint8)
+            print(self.map_surface)
+        self.screen.blit(pygame.transform.scale(self.map_surface, (self.window_size, self.window_size)), (0, 0))
 
-        img = cv2.bitwise_not(self.display_map)
-        img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
+        # Draw all foods
         for food in self.foods:
-            img[int(food[0])][int(food[1])][0] = food_color[0]
-            img[int(food[0])][int(food[1])][1] = food_color[1]
-            img[int(food[0])][int(food[1])][2] = food_color[2]
+            pygame.draw.circle(
+                self.screen, 
+                (0, 255, 0),  # Green color for food
+                (int(food[1]), int(food[0])),  # Flip x and y for correct positioning
+                3,  # Food size
+            )
 
+        # Initialize font (outside the loop, do this once in your setup code)
+        if not hasattr(self, 'font'):
+            self.font = pygame.font.Font(None, 24)
+
+        # Draw all agents
         for agent in self.agentNames:
             ag = self.agents[agent]
-            a_x = ag.x
-            a_y = ag.y
             agent_rgb = hsv2rgb(
                 self.species[ag.stats["species"]]["color"] / 180,
                 1,
                 0.25 + (1 - ag.life / ag.lifespan) * 0.75,
             )
-            img[int(a_x)][int(a_y)][0] = agent_rgb[2]
-            img[int(a_x)][int(a_y)][1] = agent_rgb[1]
-            img[int(a_x)][int(a_y)][2] = agent_rgb[0]
 
-        return cv2.resize(img, window_size, interpolation=cv2.INTER_NEAREST)
+            # Convert to integers (assuming hsv2rgb is already in [0, 255])
+            agent_color = tuple(int(channel) for channel in agent_rgb)
+
+            pygame.draw.circle(
+                self.screen,
+                agent_color,  # Pass the fixed color
+                (int(ag.y), int(ag.x)),
+                ag.health / 100 * 5,
+            )
+            
+            depth_text = str(round(ag.depth))  # Format depth to 2 decimal places
+
+            # Render the text
+            text_surface = self.font.render(depth_text, True, agent_color)
+            # Blit the text above the agent
+            text_position = (int(ag.y) - 10, int(ag.x) - 20)  # Offset to position above the agent
+            # Render the population graph
+            # if self.graph_surface:
+            #     self.screen.blit(self.graph_surface, (10, 10))  # Position graph in the window
+            self.screen.blit(text_surface, text_position)
+
+        self.draw_population_graph()
+        pygame.display.flip()
 
     def close(self):
         print(f"Closing environment Ecosystem at {self.timestep} timestep.")
-        cv2.destroyAllWindows()
+        pygame.quit()
+        self.finished = True
+        return self.full_population_history
 
     def stepper(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.close()
+                return
+            
+        if len(self.agents) == 0:
+            self.close()
+            return
+
         agents = copy(self.agents)
         for name, agent in agents.items():
             if name in self.agents:
                 agent.Activate(self)
+        # for species in self.species.keys():
+        #     population = sum(1 for agent in self.agents.values() if agent.stats["species"] == species)
+        #     self.population_history[species].append(population)
+        # self.update_population_graph()
+
+        self.agent_history.append(copy(self.agents))
+
+        for species in self.species.keys():
+            population = sum(1 for agent in self.agents.values() if agent.stats["species"] == species)
+            total_movement_cost = sum(agent.movement_cost for agent in self.agents.values() if agent.stats["species"] == species)
+            if population > 0:
+                average_movement_cost = total_movement_cost / population
+            else:
+                average_movement_cost = 0
+            history = self.population_history[species]
+            history.append(population)
+            self.full_population_history[species].append((population, average_movement_cost)) 
+            if len(history) > self.max_history_length:
+                history.pop(0)
+
         if self.render_mode == "human":
             self.render()
         self.timestep += 1
+        self.clock.tick(120)
+
+    def draw_population_graph(self):
+        pygame.draw.rect(
+            self.screen,
+            (50, 50, 50),
+            (0, self.graph_offset_y, self.window_width, self.graph_height),
+        )
+
+        pygame.draw.line(
+            self.screen,
+            (200, 200, 200),
+            (50, self.graph_offset_y),
+            (50, self.graph_offset_y + self.graph_height),
+            2,
+        )
+        pygame.draw.line(
+            self.screen,
+            (200, 200, 200),
+            (50, self.graph_offset_y + self.graph_height - 10),
+            (self.window_width - 10, self.graph_offset_y + self.graph_height - 10),
+            2,
+        )
+
+        max_population = max(max(history) for history in self.population_history.values())
+        max_population = max_population or 1
+        y_scale = (self.graph_height - 20) / max_population
+        x_scale = (self.window_width - 60) / self.max_history_length
+
+        for species, data in self.species.items():
+            hsv_color = data["color"] / 180, 1, 1
+            rgb_color = hsv2rgb(*hsv_color)
+            rgb_color = tuple(int(c) for c in rgb_color)
+
+            history = self.population_history[species]
+
+            for i in range(1, len(history)):
+                x1 = 50 + (i - 1) * x_scale
+                y1 = self.graph_offset_y + self.graph_height - 10 - history[i - 1] * y_scale
+                x2 = 50 + i * x_scale
+                y2 = self.graph_offset_y + self.graph_height - 10 - history[i] * y_scale
+                pygame.draw.line(self.screen, rgb_color, (x1, y1), (x2, y2), 2)
+
+    def update_population_graph(self):
+        fig, ax = plt.subplots(figsize=(4, 3))
+        for species, history in self.population_history.items():
+            ax.plot(history, label=self.species[species]["name"])
+        
+        ax.set_title("Species Population Balance")
+        ax.set_xlabel("Time Steps")
+        ax.set_ylabel("Population")
+        ax.legend()
+        plt.tight_layout()
+        
+        buf = io.BytesIO()
+        plt.savefig(buf, format="PNG")
+        buf.seek(0)
+        image = pygame.image.load(buf)
+        buf.close()
+        plt.close(fig)
+        
+        self.graph_surface = pygame.transform.scale(image, (400, 300))
+
 
     def getDistance(self, a_x, a_y, a_d, b_x, b_y, b_d):
         return np.sqrt((b_x - a_x) ** 2 + (b_y - a_y) ** 2 + (b_d - a_d) ** 2)
@@ -321,40 +491,72 @@ class Ecosystem:
             agentID, [x, y, d], genome, life_start_point=life_start, debug=self.debug
         )
 
+        # genome = self.species[species]["genome"]
+        # genome[""][0]
+        # genome[""][1]
     def RandomGenome(self, species):
+        """
+        Generates a random genome for the given species, 
+        using the species-specific ranges for each parameter.
+
+        Args:
+            species: The name of the species.
+
+        Returns:
+            A dictionary representing the genome of the species.
+        """
+
+        genome_ranges = self.species[species].get("genome", {}) 
+
         return {
-            "species": species,  # Present: h1, c1, np - Nile Perch
-            "speed": round(random.uniform(0.5, 3.0), 2),  # Speed between 0.5 and 3.0
-            "health": round(
-                random.uniform(50.0, 150.0), 1
-            ),  # Health between 50 and 150
-            "stomach_size": round(
-                random.uniform(50.0, 200.0), 1
-            ),  # Stomach size between 50 and 200
-            "type": self.species[species]["type"],  # Randomly choose type
+            "species": species,
+            "speed": round(random.uniform(
+                genome_ranges.get("speed", {"min": 0.5, "max": 3.0})["min"], 
+                genome_ranges.get("speed", {"min": 0.5, "max": 3.0})["max"]
+            ), 2),
+            "health": round(random.uniform(
+                genome_ranges.get("health", {"min": 50.0, "max": 150.0})["min"], 
+                genome_ranges.get("health", {"min": 50.0, "max": 150.0})["max"]
+            ), 1),
+            "stomach_size": round(random.uniform(
+                genome_ranges.get("stomach_size", {"min": 50.0, "max": 200.0})["min"], 
+                genome_ranges.get("stomach_size", {"min": 50.0, "max": 200.0})["max"]
+            ), 1),
+            "type": self.species[species]["type"],
             "armor": max(
-                round(random.uniform(0.0, 10.0) - 5, 2), 0
-            ),  # Armor between 0 and 10
-            "lifespan": 5000,
-            "bite_damage": round(
-                random.uniform(10.0, 60.0), 1
-            ),  # Bite damage between 10 and 60
-            "eyesight_range": round(
-                random.uniform(20.0, 150.0), 1
-            ),  # Eyesight range between 20 and 50
-            "feed_range": round(
-                random.uniform(2.0, 5.0), 1
-            ),  # Feed range between 2 and 5
-            "bite_range": round(
-                random.uniform(2.0, 5.0), 1
-            ),  # Bite range between 2 and 5
-            "memory": random.randint(10, 30),  # Memory between 10 and 30
+                round(random.uniform(
+                    genome_ranges.get("armor", {"min": 0.0, "max": 10.0})["min"], 
+                    genome_ranges.get("armor", {"min": 0.0, "max": 10.0})["max"]
+                ) - 5, 2), 0
+            ),
+            "lifespan": 5000,  # You might want to make this configurable in the genome
+            "bite_damage": round(random.uniform(
+                genome_ranges.get("bite_damage", {"min": 10.0, "max": 60.0})["min"], 
+                genome_ranges.get("bite_damage", {"min": 10.0, "max": 60.0})["max"]
+            ), 1),
+            "eyesight_range": round(random.uniform(
+                genome_ranges.get("eyesight_range", {"min": 20.0, "max": 150.0})["min"], 
+                genome_ranges.get("eyesight_range", {"min": 20.0, "max": 150.0})["max"]
+            ), 1),
+            "feed_range": round(random.uniform(
+                genome_ranges.get("feed_range", {"min": 2.0, "max": 5.0})["min"], 
+                genome_ranges.get("feed_range", {"min": 2.0, "max": 5.0})["max"]
+            ), 1),
+            "bite_range": round(random.uniform(
+                genome_ranges.get("bite_range", {"min": 2.0, "max": 5.0})["min"], 
+                genome_ranges.get("bite_range", {"min": 2.0, "max": 5.0})["max"]
+            ), 1),
+            "memory": random.randint(
+                genome_ranges.get("memory", {"min": 10, "max": 30})["min"], 
+                genome_ranges.get("memory", {"min": 10, "max": 30})["max"]
+            ),
             "depth_point": random.uniform(
                 self.min_depth / 2, self.max_depth * 0.75
-            ),  # Mean depth where the fish lives
+            ),  # Keep this for now
             "depth_tolerance_range": random.uniform(
-                5, 20
-            ),  # Range above and below the mean depth
+                genome_ranges.get("depth_tolerance_range", {"min": 5, "max": 20})["min"], 
+                genome_ranges.get("depth_tolerance_range", {"min": 5, "max": 20})["max"]
+            ),
         }
 
     ############################################################################################################

@@ -33,7 +33,7 @@ class Agent:
             self.stats["lifespan"], 0.15 * self.stats["lifespan"]
         )
         self.life = np.round(life_start_point * self.lifespan)
-        self.life_factor = self.LifeFactor()
+        self.life_factor = self.LifeFactor(None)
         self.speed = self.stats["speed"] * self.life_factor
         self.stomach_size = self.stats["stomach_size"] * self.life_factor
         self.food = self.stomach_size
@@ -59,9 +59,9 @@ class Agent:
         self.egg_permitted = 0
         self.patrolPoint = [-1, -1, -1]
 
-    def LifeFactor(self):
+    def LifeFactor(self, env):
         if self.life >= self.lifespan:
-            return 0
+            self.Die(env)
 
         # Calculate the thresholds
         t1 = 0.2 * self.lifespan  # 20% of X
@@ -73,10 +73,10 @@ class Agent:
             return 1.0
         elif t2 <= self.life < self.lifespan:
             return 1.0 - (0.9 * ((self.life - t2) / (self.lifespan - t2)))
-        return 0
+        return 0.001
 
     def Activate(self, env):
-        self.life_factor = self.LifeFactor()
+        self.life_factor = self.LifeFactor(env)
         self.speed = self.stats["speed"] * self.life_factor
         self.stomach_size = self.stats["stomach_size"] * self.life_factor
         if self.debug:
@@ -113,9 +113,19 @@ class Agent:
         self.visible_agents = {
             name: data for name, data in self.distances.items() if data["visible"] and name in env.agents and env.agents[name].stats["species"] != self.stats["species"]
         }
+
+        self.same_species = {
+            name: data for name, data in self.distances.items() if data["visible"] and name in env.agents and env.agents[name].stats["species"] == self.stats["species"]
+        }
+
         self.sorted_agents = sorted(
             self.visible_agents.keys(), key=lambda name: self.visible_agents[name]["distance"]
         )
+
+        self.sorted_friendly = sorted(
+            self.same_species.keys(), key=lambda name: self.same_species[name]["distance"]
+        )
+
         if (len(self.sorted_agents) > 0):
             self.closest_agent = env.agents[self.sorted_agents[0]]
             self.closest_agent_distance = self.visible_agents[self.sorted_agents[0]]["distance"]
@@ -128,8 +138,8 @@ class Agent:
             self.possible_mate = next(
                 (
                     agent
-                    for agent in self.sorted_agents
-                    if agent in env.agentNames and env.agents[agent].IsBreeding(env) and env.agents[agent].stats["species"] == self.stats["species"]
+                    for agent in self.sorted_friendly
+                    if agent in env.agentNames and self.IsMate(env, env.agents[agent])
                 ),
                 None,
             )
@@ -240,8 +250,6 @@ class Agent:
         self.CheckVitals(env)
 
     def IsThreatened(self, env):
-        # TODO: If the agent has a carnivorous or omnivorous agent nearby from a different species - return true
-        # Use the existing agent dictionaries created in the CalculateDistances function
         """Determine if the agent is threatened by nearby predators.
         
         Returns:
@@ -266,10 +274,6 @@ class Agent:
         return False
 
     def RunAway(self, env):
-        # TODO: The agent should select a vector that brings it exactly away from the threat move there like in the movement functions.
-        # The vector must avoid clipping through walls or going outside of the map.
-        # The agent should move the maximum distance it can during this time.
-        # Use the existing agent dictionaries created in the CalculateDistances function
         """Execute evasive maneuvers when threatened.
         
         The agent moves directly away from the nearest threat while staying within
@@ -375,7 +379,7 @@ class Agent:
     def CarnivoreBehavior(self, env):
         """Define the behavior of a carnivore agent."""
         # Closest agent distance logic (carnivorous feeding logic)
-        if self.closest_agent_distance < self.stats["bite_range"] * self.life_factor:
+        if self.closest_agent_distance < self.stats["bite_range"] * self.life_factor and self.stomach_size - self.food < self.stats["bite_damage"]:
             if self.debug:
                 print(
                     f"[{self.name}] Attacking agent: Agent is within attack range ({self.closest_agent_distance})."
@@ -506,6 +510,7 @@ class Agent:
             self.HerbivoreBehavior(env)
 
     def Mate(self, env, partner):
+        print("MATE")
         if not self.IsMate(env, partner):
             return  # Ensure both agents are valid mates
         print("Mating")
@@ -541,8 +546,11 @@ class Agent:
 
     def Eat(self, env):
         self.food += env.params["food_value"]
+        self.health += (env.params["food_value"] / self.stomach_size) * self.stats["health"]
         if self.food > self.stomach_size:
             self.food = self.stomach_size
+        if self.health > self.stats["health"]:
+            self.health = self.stats["health"]
         env.foods.remove(self.closest_food)
         env.generateNewFood()
 
@@ -588,6 +596,7 @@ class Agent:
         env.KillAgent(self.name)
 
     def IsBreeding(self, env):
+        # print(self.egg_permitted >= self.lifespan * 0.3, self.food >= self.stomach_size / 2)
         if (
             self.egg_permitted >= self.lifespan * 0.3
             and self.food >= self.stomach_size / 2
@@ -596,7 +605,9 @@ class Agent:
         return False
 
     def IsMate(self, env, agent):
+        print(self.stats["type"] == agent.stats["type"], self.stats["type"], agent.stats["type"])
         if self.stats["type"] == agent.stats["type"] and agent.IsBreeding(env):
+            print("ISMATE")
             return True
         return False
 

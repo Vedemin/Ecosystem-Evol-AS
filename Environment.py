@@ -64,8 +64,8 @@ class Ecosystem:
                 "color": 90,
                 "rgb": hsv2rgb(90, 1, 1),
                 "genome": {
-                    "speed": {"min": 1.0, "max": 2.5},  # Herbivores generally slower
-                    "health": {"min": 70.0, "max": 120.0},
+                    "speed": {"min": 1.0, "max": 6.0},
+                    "health": {"min": 170.0, "max": 340.0},
                     "stomach_size": {"min": 100.0, "max": 150.0},  # Moderate stomach size
                     "armor": {"min": 0.0, "max": 5.0},  # Relatively low armor
                     "bite_damage": {"min": 5.0, "max": 20.0},  # Low bite damage for herbivores
@@ -95,25 +95,25 @@ class Ecosystem:
                     "depth_tolerance_range": {"min": 5, "max": 15}  # Moderate depth tolerance
                 }
             },
-            # "n_p": {
-            #     "name": "Nile Perch",
-            #     "type": "carnivore",
-            #     "population": 50,
-            #     "color": 150,
-            #     "rgb": hsv2rgb(150, 1, 1),
-            #     "genome": {
-            #         "speed": {"min": 3.0, "max": 5.0},  # Very fast
-            #         "health": {"min": 80.0, "max": 150.0},  # High health
-            #         "stomach_size": {"min": 120.0, "max": 200.0},  # Large stomach size
-            #         "armor": {"min": 5.0, "max": 10.0},  # High armor
-            #         "bite_damage": {"min": 40.0, "max": 70.0},  # Very high bite damage
-            #         "eyesight_range": {"min": 80.0, "max": 150.0},  # Excellent eyesight
-            #         "feed_range": {"min": 1.0, "max": 2.0},  # Short feeding range (aggressive)
-            #         "bite_range": {"min": 3.0, "max": 5.0},  # High bite range
-            #         "memory": {"min": 20, "max": 30},  # High memory
-            #         "depth_tolerance_range": {"min": 3, "max": 10}  # Narrow depth tolerance (specialization)
-            #     }
-            # },
+            "n_p": {
+                "name": "Nile Perch",
+                "type": "carnivore",
+                "population": 50,
+                "color": 150,
+                "rgb": hsv2rgb(150, 1, 1),
+                "genome": {
+                    "speed": {"min": 3.0, "max": 10.0},  # Very fast
+                    "health": {"min": 580.0, "max": 1150.0},  # High health
+                    "stomach_size": {"min": 120.0, "max": 200.0},  # Large stomach size
+                    "armor": {"min": 5.0, "max": 10.0},  # High armor
+                    "bite_damage": {"min": 40.0, "max": 70.0},  # Very high bite damage
+                    "eyesight_range": {"min": 80.0, "max": 150.0},  # Excellent eyesight
+                    "feed_range": {"min": 1.0, "max": 2.0},  # Short feeding range (aggressive)
+                    "bite_range": {"min": 3.0, "max": 5.0},  # High bite range
+                    "memory": {"min": 20, "max": 30},  # High memory
+                    "depth_tolerance_range": {"min": 3, "max": 10}  # Narrow depth tolerance (specialization)
+                }
+            },
         }
         for key in params:
             if key in self.params:
@@ -554,13 +554,14 @@ class Ecosystem:
                 self.min_depth / 2, self.max_depth * 0.75
             ),  # Keep this for now
             "depth_tolerance_range": random.uniform(
-                genome_ranges.get("depth_tolerance_range", {"min": 5, "max": 20})["min"], 
-                genome_ranges.get("depth_tolerance_range", {"min": 5, "max": 20})["max"]
+                genome_ranges.get("depth_tolerance_range", {"min": 5, "max": 70})["min"], 
+                genome_ranges.get("depth_tolerance_range", {"min": 5, "max": 70})["max"]
             ),
         }
 
     ############################################################################################################
 
     def KillAgent(self, agentID):
-        self.agents.pop(agentID)
-        self.agentNames.remove(agentID)
+        if agentID in self.agents:
+            self.agents.pop(agentID)
+            self.agentNames.remove(agentID)

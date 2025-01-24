@@ -604,9 +604,7 @@ class Agent:
         return False
 
     def IsMate(self, env, agent):
-        print(self.stats["type"] == agent.stats["type"], self.stats["type"], agent.stats["type"])
         if self.stats["type"] == agent.stats["type"] and agent.IsBreeding(env):
-            print("ISMATE")
             return True
         return False
 

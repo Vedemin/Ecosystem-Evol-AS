@@ -592,7 +592,6 @@ class Agent:
     def Die(self, env):
         if self.debug:
             print("Agent death")
-        print("Agent death")
         env.KillAgent(self.name)
 
     def IsBreeding(self, env):

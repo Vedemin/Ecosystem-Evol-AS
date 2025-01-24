@@ -60,7 +60,7 @@ class Ecosystem:
             "hb1": {
                 "name": "generic herbivore",
                 "type": "herbivore",
-                "population": 30,
+                "population": 150,
                 "color": 90,
                 "rgb": hsv2rgb(90, 1, 1),
                 "genome": {
@@ -79,7 +79,7 @@ class Ecosystem:
             "cv1": {
                 "name": "generic carnivore",
                 "type": "carnivore",
-                "population": 30,
+                "population": 60,
                 "color": 0,
                 "rgb": hsv2rgb(0, 1, 1),
                 "genome": {
@@ -88,32 +88,32 @@ class Ecosystem:
                     "stomach_size": {"min": 80.0, "max": 120.0},  # Moderate stomach size
                     "armor": {"min": 2.0, "max": 7.0},  # Moderate armor
                     "bite_damage": {"min": 20.0, "max": 40.0},  # Higher bite damage for carnivores
-                    "eyesight_range": {"min": 40.0, "max": 100.0},  # Good eyesight
+                    "eyesight_range": {"min": 10.0, "max": 50.0},  # Good eyesight
                     "feed_range": {"min": 2.0, "max": 3.0},  # Moderate feeding range
                     "bite_range": {"min": 2.0, "max": 4.0},  # Moderate bite range
                     "memory": {"min": 10, "max": 20},  # Moderate memory
                     "depth_tolerance_range": {"min": 5, "max": 15}  # Moderate depth tolerance
                 }
             },
-            "n_p": {
-                "name": "Nile Perch",
-                "type": "carnivore",
-                "population": 50,
-                "color": 150,
-                "rgb": hsv2rgb(150, 1, 1),
-                "genome": {
-                    "speed": {"min": 3.0, "max": 10.0},  # Very fast
-                    "health": {"min": 580.0, "max": 1150.0},  # High health
-                    "stomach_size": {"min": 120.0, "max": 200.0},  # Large stomach size
-                    "armor": {"min": 5.0, "max": 10.0},  # High armor
-                    "bite_damage": {"min": 40.0, "max": 70.0},  # Very high bite damage
-                    "eyesight_range": {"min": 80.0, "max": 150.0},  # Excellent eyesight
-                    "feed_range": {"min": 1.0, "max": 2.0},  # Short feeding range (aggressive)
-                    "bite_range": {"min": 3.0, "max": 5.0},  # High bite range
-                    "memory": {"min": 20, "max": 30},  # High memory
-                    "depth_tolerance_range": {"min": 3, "max": 10}  # Narrow depth tolerance (specialization)
-                }
-            },
+            # "n_p": {
+            #     "name": "Nile Perch",
+            #     "type": "carnivore",
+            #     "population": 10,
+            #     "color": 150,
+            #     "rgb": hsv2rgb(150, 1, 1),
+            #     "genome": {
+            #         "speed": {"min": 3.0, "max": 10.0},  # Very fast
+            #         "health": {"min": 580.0, "max": 1150.0},  # High health
+            #         "stomach_size": {"min": 120.0, "max": 200.0},  # Large stomach size
+            #         "armor": {"min": 5.0, "max": 10.0},  # High armor
+            #         "bite_damage": {"min": 40.0, "max": 70.0},  # Very high bite damage
+            #         "eyesight_range": {"min": 30.0, "max": 70.0},  # Excellent eyesight
+            #         "feed_range": {"min": 1.0, "max": 2.0},  # Short feeding range (aggressive)
+            #         "bite_range": {"min": 3.0, "max": 5.0},  # High bite range
+            #         "memory": {"min": 20, "max": 30},  # High memory
+            #         "depth_tolerance_range": {"min": 3, "max": 10}  # Narrow depth tolerance (specialization)
+            #     }
+            # },
         }
         for key in params:
             if key in self.params:
@@ -243,7 +243,7 @@ class Ecosystem:
                 self.screen,
                 agent_color,  # Pass the fixed color
                 (int(ag.y), int(ag.x)),
-                ag.health / 100 * 5,
+                ag.health / ((self.species[ag.stats["species"]]["genome"]["health"]["min"] + self.species[ag.stats["species"]]["genome"]["health"]["max"]) / 2),
             )
             
             depth_text = str(round(ag.depth))  # Format depth to 2 decimal places

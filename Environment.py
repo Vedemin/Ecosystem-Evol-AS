@@ -26,21 +26,88 @@ default_genome = {
 }
 
 default_params = {
-    "mapsize": 256,
+    "mapsize": 128,
     "min_depth": 10,
     "max_depth": 30,
-    "starting_population": 10,
+    "starting_population": 15,
     "food_value": 200,
+    "movement_cost": -1,
+    "food_per_agent": 2,
     "max_timesteps": 200000,
-    "movement_cost_factor": 0.5,
-    "food_per_agent": 4,
+    "movement_cost_factor": 1.0,
     "egg_incubation_time": 100,
     "mutation_factor": 2,
+    "starting_plant_population": 100,
+    "plant_growth_speed": 0.01,
+    "plant_minimum_growth_percentage": 0.5,
+    "plant_spread_amount": 2,
+    "plant_spread_radius": 400,
+    "plant_spread_interval": 500
+}
+
+default_species = {
+    "hb1": {
+        "name": "generic herbivore",
+        "type": "herbivore",
+        "population": 50,
+        "color": 90,
+        "rgb": hsv2rgb(90, 1, 1),
+        "genome": {
+            "speed": {"min": 1.0, "max": 6.0},
+            "health": {"min": 170.0, "max": 340.0},
+            "stomach_size": {"min": 100.0, "max": 150.0},  # Moderate stomach size
+            "armor": {"min": 0.0, "max": 5.0},  # Relatively low armor
+            "bite_damage": {"min": 5.0, "max": 20.0},  # Low bite damage for herbivores
+            "eyesight_range": {"min": 30.0, "max": 80.0},  # Moderate eyesight
+            "feed_range": {"min": 3.0, "max": 4.0},  # Moderate feeding range
+            "bite_range": {"min": 2.0, "max": 3.0},  # Moderate bite range
+            "memory": {"min": 15, "max": 25},  # Moderate memory
+            "depth_tolerance_range": {"min": 5, "max": 15}  # Moderate depth tolerance
+        }
+    },
+    "cv1": {
+        "name": "generic carnivore",
+        "type": "carnivore",
+        "population": 60,
+        "color": 0,
+        "rgb": hsv2rgb(0, 1, 1),
+        "genome": {
+            "speed": {"min": 2.0, "max": 4.0},  # Carnivores generally faster
+            "health": {"min": 60.0, "max": 110.0},
+            "stomach_size": {"min": 80.0, "max": 120.0},  # Moderate stomach size
+            "armor": {"min": 2.0, "max": 7.0},  # Moderate armor
+            "bite_damage": {"min": 20.0, "max": 40.0},  # Higher bite damage for carnivores
+            "eyesight_range": {"min": 10.0, "max": 50.0},  # Good eyesight
+            "feed_range": {"min": 2.0, "max": 3.0},  # Moderate feeding range
+            "bite_range": {"min": 2.0, "max": 4.0},  # Moderate bite range
+            "memory": {"min": 10, "max": 20},  # Moderate memory
+            "depth_tolerance_range": {"min": 5, "max": 15}  # Moderate depth tolerance
+        }
+    },
+    "n_p": {
+        "name": "Nile Perch",
+        "type": "carnivore",
+        "population": 10,
+        "color": 150,
+        "rgb": hsv2rgb(150, 1, 1),
+        "genome": {
+            "speed": {"min": 3.0, "max": 10.0},  # Very fast
+            "health": {"min": 580.0, "max": 1150.0},  # High health
+            "stomach_size": {"min": 120.0, "max": 200.0},  # Large stomach size
+            "armor": {"min": 5.0, "max": 10.0},  # High armor
+            "bite_damage": {"min": 40.0, "max": 70.0},  # Very high bite damage
+            "eyesight_range": {"min": 30.0, "max": 70.0},  # Excellent eyesight
+            "feed_range": {"min": 1.0, "max": 2.0},  # Short feeding range (aggressive)
+            "bite_range": {"min": 3.0, "max": 5.0},  # High bite range
+            "memory": {"min": 20, "max": 30},  # High memory
+            "depth_tolerance_range": {"min": 3, "max": 10}  # Narrow depth tolerance (specialization)
+        }
+    },
 }
 
 
 class Ecosystem:
-    def __init__(self, render_mode, params=default_params, image_path="", debug=False):
+    def __init__(self, render_mode, params=default_params, species=default_species, image_path="", debug=False):
         self.render_mode = render_mode
         self.debug = debug
         self.params = {
@@ -55,71 +122,25 @@ class Ecosystem:
             "movement_cost_factor": 1.0,
             "egg_incubation_time": 100,
             "mutation_factor": 2,
+            "starting_plant_population": 100,
+            "plant_growth_speed": 0.01,
+            "plant_minimum_growth_percentage": 0.5,
+            "plant_spread_amount": 2,
+            "plant_spread_radius": 400,
+            "plant_spread_interval": 500
         }
-        self.species = {
-            "hb1": {
-                "name": "generic herbivore",
-                "type": "herbivore",
-                "population": 150,
-                "color": 90,
-                "rgb": hsv2rgb(90, 1, 1),
-                "genome": {
-                    "speed": {"min": 1.0, "max": 6.0},
-                    "health": {"min": 170.0, "max": 340.0},
-                    "stomach_size": {"min": 100.0, "max": 150.0},  # Moderate stomach size
-                    "armor": {"min": 0.0, "max": 5.0},  # Relatively low armor
-                    "bite_damage": {"min": 5.0, "max": 20.0},  # Low bite damage for herbivores
-                    "eyesight_range": {"min": 30.0, "max": 80.0},  # Moderate eyesight
-                    "feed_range": {"min": 3.0, "max": 4.0},  # Moderate feeding range
-                    "bite_range": {"min": 2.0, "max": 3.0},  # Moderate bite range
-                    "memory": {"min": 15, "max": 25},  # Moderate memory
-                    "depth_tolerance_range": {"min": 5, "max": 15}  # Moderate depth tolerance
-                }
-            },
-            "cv1": {
-                "name": "generic carnivore",
-                "type": "carnivore",
-                "population": 60,
-                "color": 0,
-                "rgb": hsv2rgb(0, 1, 1),
-                "genome": {
-                    "speed": {"min": 2.0, "max": 4.0},  # Carnivores generally faster
-                    "health": {"min": 60.0, "max": 110.0},
-                    "stomach_size": {"min": 80.0, "max": 120.0},  # Moderate stomach size
-                    "armor": {"min": 2.0, "max": 7.0},  # Moderate armor
-                    "bite_damage": {"min": 20.0, "max": 40.0},  # Higher bite damage for carnivores
-                    "eyesight_range": {"min": 10.0, "max": 50.0},  # Good eyesight
-                    "feed_range": {"min": 2.0, "max": 3.0},  # Moderate feeding range
-                    "bite_range": {"min": 2.0, "max": 4.0},  # Moderate bite range
-                    "memory": {"min": 10, "max": 20},  # Moderate memory
-                    "depth_tolerance_range": {"min": 5, "max": 15}  # Moderate depth tolerance
-                }
-            },
-            # "n_p": {
-            #     "name": "Nile Perch",
-            #     "type": "carnivore",
-            #     "population": 10,
-            #     "color": 150,
-            #     "rgb": hsv2rgb(150, 1, 1),
-            #     "genome": {
-            #         "speed": {"min": 3.0, "max": 10.0},  # Very fast
-            #         "health": {"min": 580.0, "max": 1150.0},  # High health
-            #         "stomach_size": {"min": 120.0, "max": 200.0},  # Large stomach size
-            #         "armor": {"min": 5.0, "max": 10.0},  # High armor
-            #         "bite_damage": {"min": 40.0, "max": 70.0},  # Very high bite damage
-            #         "eyesight_range": {"min": 30.0, "max": 70.0},  # Excellent eyesight
-            #         "feed_range": {"min": 1.0, "max": 2.0},  # Short feeding range (aggressive)
-            #         "bite_range": {"min": 3.0, "max": 5.0},  # High bite range
-            #         "memory": {"min": 20, "max": 30},  # High memory
-            #         "depth_tolerance_range": {"min": 3, "max": 10}  # Narrow depth tolerance (specialization)
-            #     }
-            # },
-        }
+        self.species = species
+
         for key in params:
             if key in self.params:
                 self.params[key] = params[key]
             else:
                 print("Parameter", key, "is invalid")
+
+        
+        if "max_plants_global" not in params:
+            params["max_plants_global"] = 200
+        self.params["max_plants_global"] = params["max_plants_global"]  
 
         self.mapsize = (self.params["mapsize"], self.params["mapsize"])
         self.min_depth = self.params["min_depth"]
@@ -141,18 +162,20 @@ class Ecosystem:
             norm_type=cv2.NORM_MINMAX,
             dtype=cv2.CV_8U,
         )
+        
         self.cross = np.sqrt(
             self.mapsize[0] ** 2 + self.mapsize[1] ** 2 + self.max_depth**2
         )
-        self.depth_partition_precision = 10  # Default precision value
+        self.depth_partition_precision = 4
 
         self.possible_agents = [
-            f"agent_{i}" for i in range(self.params["starting_population"])
+            f"a_{i}" for i in range(self.params["starting_population"])
         ]
         self.possible_agents = []
         for species, data in self.species.items():
             for i in range(data["population"]):
                 self.possible_agents.append(f"{species}_agent_{i}")
+        
         self.foodAmount = (
             self.params["starting_population"] * self.params["food_per_agent"]
         )
@@ -179,6 +202,8 @@ class Ecosystem:
             self.screen = pygame.display.set_mode((self.window_width, self.window_height))
         self.population_history = {species: [0] * 200 for species in self.species.keys()}
         self.agent_history = []
+        self.plant_history = []
+        self.death_log = {}
         self.finished = False
         self.full_population_history = {species: [(0, 0)] for species in self.species.keys()}
         self.max_history_length = 200
@@ -210,7 +235,6 @@ class Ecosystem:
 
             display_map_uint8 = display_map_rgb.astype(np.uint8)
             pygame.surfarray.blit_array(self.map_surface, display_map_uint8)
-            print(self.map_surface)
         self.screen.blit(pygame.transform.scale(self.map_surface, (self.window_size, self.window_size)), (0, 0))
 
 
@@ -271,39 +295,42 @@ class Ecosystem:
             if event.type == pygame.QUIT:
                 self.close()
                 return
-            
+
         if len(self.agents) == 0:
             self.close()
             return
 
-        agents = copy(self.agents)
-        for name, agent in agents.items():
+        agents_copy = copy(self.agents)
+        for name, agent in agents_copy.items():
             if name in self.agents:
                 agent.Activate(self)
-        # for species in self.species.keys():
-        #     population = sum(1 for agent in self.agents.values() if agent.stats["species"] == species)
-        #     self.population_history[species].append(population)
-        # self.update_population_graph()
 
         self.agent_history.append(copy(self.agents))
-
+        self.plant_history.append(copy(self.foods))
         for species in self.species.keys():
             population = sum(1 for agent in self.agents.values() if agent.stats["species"] == species)
-            total_movement_cost = sum(agent.movement_cost for agent in self.agents.values() if agent.stats["species"] == species)
-            if population > 0:
-                average_movement_cost = total_movement_cost / population
-            else:
-                average_movement_cost = 0
+            total_movement_cost = sum(
+                agent.movement_cost for agent in self.agents.values()
+                if agent.stats["species"] == species
+            )
+            avg_movement_cost = total_movement_cost/population if population else 0
             history = self.population_history[species]
             history.append(population)
-            self.full_population_history[species].append((population, average_movement_cost)) 
+            self.full_population_history[species].append((population, avg_movement_cost))
             if len(history) > self.max_history_length:
                 history.pop(0)
 
+        ## Changes start
+        # Update plant growth + spreading each step
+        self.updatePlants()
+        ## Changes end
+
         if self.render_mode == "human":
             self.render()
+            self.clock.tick(120)
+
         self.timestep += 1
-        self.clock.tick(120)
+
 
     def draw_population_graph(self):
         pygame.draw.rect(
@@ -346,6 +373,32 @@ class Ecosystem:
                 y2 = self.graph_offset_y + self.graph_height - 10 - history[i] * y_scale
                 pygame.draw.line(self.screen, rgb_color, (x1, y1), (x2, y2), 2)
 
+    def updatePlants(self):
+        """
+        ## Changes start
+        # For each plant, increase growth_percentage, decrement spread timer,
+        # and if conditions are met, spread.
+        # Agents will use self.params["food_value"] * growth_percentage to get
+        # the actual "food" when they eat (handled in Agent class).
+        ## Changes end
+        """
+        for i, plant in enumerate(self.foods):
+            x, y, depth, growth_pct, spread_t = plant
+
+            growth_pct += self.params["plant_growth_speed"]
+            if growth_pct > 1.0:
+                growth_pct = 1.0
+
+            spread_t -= 1
+
+            if (spread_t <= 0 and
+                growth_pct >= self.params["plant_minimum_growth_percentage"]):
+                self.spreadPlants(x, y)
+                spread_t = self.params["plant_spread_interval"]
+
+            self.foods[i] = [x, y, depth, growth_pct, spread_t]
+
+
     def update_population_graph(self):
         fig, ax = plt.subplots(figsize=(4, 3))
         for species, history in self.population_history.items():
@@ -365,7 +418,6 @@ class Ecosystem:
         plt.close(fig)
         
         self.graph_surface = pygame.transform.scale(image, (400, 300))
-
 
     def getDistance(self, a_x, a_y, a_d, b_x, b_y, b_d):
         return np.sqrt((b_x - a_x) ** 2 + (b_y - a_y) ** 2 + (b_d - a_d) ** 2)
@@ -445,7 +497,7 @@ class Ecosystem:
     def generateMap(self):
         # Loads map file and converts it to a discrete terrain map
         scaling_factor = (self.max_depth - self.min_depth) / 255.0
-        self.map = (self.display_map * scaling_factor + self.min_depth).astype(np.int16)
+        self.map = ((255 - self.display_map) * scaling_factor + self.min_depth).astype(np.int16)
         self.chunk_min_depth = []
         self.chunk_max_depth = []
         print(self.map)
@@ -469,16 +521,68 @@ class Ecosystem:
     ############################################################################################################
 
     # Check how much food is present and generate what is missing
-    def generateNewFood(self, fullGrown=True):
-        currentFood = len(self.foods)
-        while currentFood < self.foodAmount:
+    def generateNewFood(self):
+        """
+        Spawns self.params["starting_plant_population"] plants (global limit).
+        One-third of them at a random initial growth percentage, the remaining
+        two-thirds at full (1.0) growth.
+        We stop spawning if we reach or exceed self.params["max_plants_global"].
+        """
+        total_plants = self.params["starting_plant_population"]
+        threshold = total_plants // 3  # One-third
+
+        for i in range(total_plants):
+            # Check global maximum
+            if len(self.foods) >= self.params["max_plants_global"]:
+                break
+
             x = self.gridRInt("x")
             y = self.gridRInt("y")
-            depth_point = float(self.map[int(x)][int(y)]) - 2
-            self.foods.append([x, y, depth_point, self.params["food_value"]])
-            if self.debug:
-                print([x, y, depth_point], self.map[int(x)][int(y)])
-            currentFood = len(self.foods)
+            depth_point = float(self.map[int(x)][int(y)])
+
+            # Decide growth percentage
+            if i < threshold:
+                initial_growth = random.uniform(0.0, 1.0)
+            else:
+                initial_growth = 1.0
+
+            # Random spread timer so not all plants spread simultaneously
+            spread_timer = random.randint(1, self.params["plant_spread_interval"])
+
+            # Append the plant if we're under the global limit
+            self.foods.append([x, y, depth_point, initial_growth, spread_timer])
+
+
+    def spreadPlants(self, px, py):
+        """
+        Attempts to spawn self.params["plant_spread_amount"] new plants
+        around (px, py), each with 0 growth initially. Respects the global
+        maximum (max_plants_global).
+        """
+        for _ in range(self.params["plant_spread_amount"]):
+            # Check global maximum
+            if len(self.foods) >= self.params["max_plants_global"]:
+                break
+
+            r = random.uniform(0, self.params["plant_spread_radius"])
+            theta = random.uniform(0, 2 * np.pi)
+            nx = px + r * np.cos(theta)
+            ny = py + r * np.sin(theta)
+
+            # Must be in map bounds
+            if 0 < nx < self.mapsize[0] - 1 and 0 < ny < self.mapsize[1] - 1:
+                # Depth is the local terrain minus 1
+                new_depth = float(self.map[int(nx)][int(ny)]) - 1
+
+                # Add the new plant
+                self.foods.append([
+                    nx, ny, new_depth,
+                    0.0,  # starts at zero growth
+                    self.params["plant_spread_interval"]
+                ])
+
+
+
 
     ############################################################################################################
 
@@ -487,25 +591,12 @@ class Ecosystem:
         if is_new:
             life_start = np.random.uniform(0.1, 0.5)
             self.agentNames.append(agentID)
+        species_data = self.species[genome["species"]]
         self.agents[agentID] = Agent(
-            agentID, [x, y, d], genome, life_start_point=life_start, debug=self.debug
+            agentID, [x, y, d], genome, avg_lifespan=species_data["genome"]["lifespan"], life_start_point=life_start, debug=self.debug
         )
 
-        # genome = self.species[species]["genome"]
-        # genome[""][0]
-        # genome[""][1]
     def RandomGenome(self, species):
-        """
-        Generates a random genome for the given species, 
-        using the species-specific ranges for each parameter.
-
-        Args:
-            species: The name of the species.
-
-        Returns:
-            A dictionary representing the genome of the species.
-        """
-
         genome_ranges = self.species[species].get("genome", {}) 
 
         return {
@@ -529,7 +620,8 @@ class Ecosystem:
                     genome_ranges.get("armor", {"min": 0.0, "max": 10.0})["max"]
                 ) - 5, 2), 0
             ),
-            "lifespan": 5000,  # You might want to make this configurable in the genome
+            "lifespan": genome_ranges.get("lifespan", 5000),  # You might want to make this configurable in the genome
+            "egg_lifespan_required": genome_ranges.get("egg_lifespan_required", 0.2),
             "bite_damage": round(random.uniform(
                 genome_ranges.get("bite_damage", {"min": 10.0, "max": 60.0})["min"], 
                 genome_ranges.get("bite_damage", {"min": 10.0, "max": 60.0})["max"]
@@ -552,7 +644,7 @@ class Ecosystem:
             ),
             "depth_point": random.uniform(
                 self.min_depth / 2, self.max_depth * 0.75
-            ),  # Keep this for now
+            ),
             "depth_tolerance_range": random.uniform(
                 genome_ranges.get("depth_tolerance_range", {"min": 5, "max": 70})["min"], 
                 genome_ranges.get("depth_tolerance_range", {"min": 5, "max": 70})["max"]
@@ -561,7 +653,14 @@ class Ecosystem:
 
     ############################################################################################################
 
-    def KillAgent(self, agentID):
+    def KillAgent(self, agentID, reason="unknown"):
+        """
+        Removes an agent from the simulation and logs its cause of death/timestep.
+        """
         if agentID in self.agents:
+            self.death_log[agentID] = {
+                "reason": reason,
+                "time": self.timestep
+            }
             self.agents.pop(agentID)
             self.agentNames.remove(agentID)

@@ -98,38 +98,46 @@ def GetAgentVector(agent, target):
     ]
 
 def CalculateMovementCost(genome):
-    # Base movement cost
+    """
+    Calculates the movement cost of an agent based on numeric genome stats,
+    excluding 'lifespan' but including 'depth_tolerance_range'.
+    Weights are chosen to scale reasonably with each stat's typical range.
+    """
+
+    # Base movement cost (negative = cost to move)
     base_cost = -0.1
 
-    # Weight factors for all stats
+    # Approximate weights for each numeric stat.
+    # Adjusted to ensure health doesn't inflate cost too much,
+    # and speed/armor remain significant factors.
     weights = {
-        "speed": 0.4,           # Significant impact due to faster movement
-        "health": 0.004,        # Slight impact
-        "stomach_size": 0.001,  # Minimal impact
-        "armor": 0.05,          # Medium impact
-        "bite_damage": 0.003,   # Carnivores with high bite damage are slightly costlier
-        "eyesight_range": 0.002,  # Slight impact
-        "feed_range": 0.002,    # Slight impact
-        "bite_range": 0.002,    # Slight impact
-        "memory": 0.001,        # Very minimal impact for larger memory capacity
+        "speed": 0.4,                  # High penalty for high speed
+        "health": 0.0003,             # Very small weight, as health can be in hundreds
+        "stomach_size": 0.001,        # Small impact
+        "armor": 0.05,                # Medium impact
+        "bite_damage": 0.003,         # Small impact
+        "eyesight_range": 0.002,      # Slight impact
+        "feed_range": 0.002,          # Slight impact
+        "bite_range": 0.002,          # Slight impact
+        "memory": 0.001,              # Very minimal impact
+        "depth_tolerance_range": 0.001  # Slight penalty for wide depth flexibility
     }
 
-    # Calculate additional cost from genome
-    additional_cost = (
-        genome["speed"] * weights["speed"] +
-        genome["health"] * weights["health"] +
-        genome["stomach_size"] * weights["stomach_size"] +
-        genome["armor"] * weights["armor"] +
-        genome["bite_damage"] * weights["bite_damage"] +
-        genome["eyesight_range"] * weights["eyesight_range"] +
-        genome["feed_range"] * weights["feed_range"] +
-        genome["bite_range"] * weights["bite_range"] +
-        genome["memory"] * weights["memory"]
-    )
+    additional_cost = 0.0
 
-    # Total movement cost, clamped to ensure it doesn't drop below -10
-    movement_cost = max(base_cost - additional_cost, -10.0)
+    # Sum up the additional cost from each relevant numeric stat
+    for stat_name, weight in weights.items():
+        if stat_name in genome and isinstance(genome[stat_name], (int, float)):
+            additional_cost += genome[stat_name] * weight
+
+    # Combine with base cost (the more you invest in stats, the higher your negative cost)
+    movement_cost = base_cost - additional_cost
+
+    # Clamp so it doesn't go below -10
+    movement_cost = max(movement_cost, -10.0)
+
     return movement_cost
 
 def hsv2rgb(h, s, v):
     return tuple(round(i * 255) for i in colorsys.hsv_to_rgb(h, s, v))
+    

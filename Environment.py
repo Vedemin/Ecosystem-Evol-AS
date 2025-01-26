@@ -255,7 +255,7 @@ class Ecosystem:
         for agent in self.agentNames:
             ag = self.agents[agent]
             agent_rgb = hsv2rgb(
-                self.species[ag.stats["species"]]["color"] / 180,
+                self.species[ag.stats["species"]]["color"],
                 1,
                 0.25 + (1 - ag.life / ag.lifespan) * 0.75,
             )
@@ -360,7 +360,7 @@ class Ecosystem:
         x_scale = (self.window_width - 60) / self.max_history_length
 
         for species, data in self.species.items():
-            hsv_color = data["color"] / 180, 1, 1
+            hsv_color = data["color"], 1, 1
             rgb_color = hsv2rgb(*hsv_color)
             rgb_color = tuple(int(c) for c in rgb_color)
 

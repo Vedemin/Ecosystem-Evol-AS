@@ -139,5 +139,16 @@ def CalculateMovementCost(genome):
     return movement_cost
 
 def hsv2rgb(h, s, v):
-    return tuple(round(i * 255) for i in colorsys.hsv_to_rgb(h, s, v))
+    """
+    Converts an HSV color (where h in [0..180], s in [0..1], v in [0..1])
+    to an RGB tuple in [0..255].
+    """
+    # Convert hue from [0..180] to [0..1] for Python's colorsys
+    h_normalized = h / 180.0
+    
+    # Use the standard colorsys, which expects h in [0..1], s in [0..1], v in [0..1]
+    rgb_fractional = colorsys.hsv_to_rgb(h_normalized, s, v)
+    
+    # Scale from [0..1] to [0..255]
+    return tuple(round(channel * 255) for channel in rgb_fractional)
     

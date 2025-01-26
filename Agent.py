@@ -59,6 +59,8 @@ class Agent:
         self.egg_permitted = 0
         self.breeding_lifespan_threshold = self.stats["egg_lifespan_required"] * avg_lifespan
         self.patrolPoint = [-1, -1, -1]
+        self.invisibleVictim = None       # Name of the agent that is invisible to me
+        self.invisibleVictimMemory = 0    # Memory countdown for invisible victim
 
     def LifeFactor(self, env):
         if self.life >= self.lifespan:
@@ -87,11 +89,16 @@ class Agent:
         self.egg_permitted += 1
         self.life += 1
 
+        if self.invisibleVictimMemory > 0:
+            self.invisibleVictimMemory -= 1
+            if self.invisibleVictimMemory <= 0:
+                self.invisibleVictim = None
+
     def CalculateDistances(self, env):
         eyesight_range = self.stats["eyesight_range"] * self.life_factor
 
         for name, agent in env.agents.items():
-            if name == self.name or name not in env.agents:
+            if name == self.name or name == self.invisibleVictim:
                 continue
             visible, distance = RayCast(
                 env,
@@ -478,12 +485,12 @@ class Agent:
 
     def Mate(self, env, partner):
         if not self.IsMate(env, partner):
-            return  
+            return
 
         mutationFactor = env.params["mutation_factor"]
         newGenome = self.NewGenome(env, partner, mutationFactor)
 
-        offspring_name = f"{self.name}-{partner.name}-child_{env.timestep}"
+        offspring_name = f"{self.name}-{partner.name}-c{env.timestep}"
         env.createNewAgent(
             (self.x + partner.x) / 2,
             (self.y + partner.y) / 2,
@@ -525,6 +532,10 @@ class Agent:
         self.food += target.GetDamaged(env, self.stats["bite_damage"])
         if self.food > self.stomach_size:
             self.food = self.stomach_size
+
+        if self.invisibleVictim != target.name:
+            self.invisibleVictim = target.name
+            self.invisibleVictimMemory = int(self.stats["memory"])
 
     def GetDamaged(self, env, amount):
         damage = amount - self.stats["armor"]

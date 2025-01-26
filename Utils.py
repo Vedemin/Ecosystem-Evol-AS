@@ -1,6 +1,9 @@
 import numpy as np
 import colorsys
+import math
+from numba import njit
 
+# @njit
 def RayCast(env, a_x, a_y, a_d, b_x, b_y, b_d, sight_distance):
     def getChunksIntersected(a_x, a_y, b_x, b_y, chunk_size):
         """Calculate the chunks intersected by the line from (a_x, a_y) to (b_x, b_y)."""
@@ -69,11 +72,13 @@ def RayCast(env, a_x, a_y, a_d, b_x, b_y, b_d, sight_distance):
 
     return True, dist
 
+@njit
 def GetDistance(a_x, a_y, a_d, b_x, b_y, b_d):
-    return np.sqrt((b_x - a_x) ** 2 + (b_y - a_y) ** 2 + (b_d - a_d) ** 2)
+    return math.sqrt((b_x - a_x) ** 2 + (b_y - a_y) ** 2 + (b_d - a_d) ** 2)
 
+@njit
 def VectorMagnitude(vector):
-    return np.sqrt(vector[0] ** 2 + vector[1] ** 2 + vector[2] ** 2)
+    return math.sqrt(vector[0] ** 2 + vector[1] ** 2 + vector[2] ** 2)
 
 def NormalizedVector(vector):
     mag = VectorMagnitude(vector)

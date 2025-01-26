@@ -127,7 +127,8 @@ class Ecosystem:
             "plant_minimum_growth_percentage": 0.5,
             "plant_spread_amount": 2,
             "plant_spread_radius": 400,
-            "plant_spread_interval": 500
+            "plant_spread_interval": 500,
+            "max_plants_global": 200,
         }
         self.species = species
 
@@ -221,68 +222,91 @@ class Ecosystem:
         return
 
     def render(self):
+        # 1) Clear the screen to black
         self.screen.fill((0, 0, 0))
-        if self.map_surface is None:
-            self.map_surface = pygame.Surface(self.mapsize)
-            
-            # Ensure display_map is in the correct format
-            if len(self.display_map.shape) == 2:  # Grayscale map
-                display_map_rgb = np.stack([self.display_map] * 3, axis=-1)  # Convert to RGB
-            elif len(self.display_map.shape) == 3 and self.display_map.shape[2] == 3:
-                display_map_rgb = self.display_map  # Already in RGB
-            else:
-                raise ValueError("Unexpected shape for display_map: " + str(self.display_map.shape))
 
-            display_map_uint8 = display_map_rgb.astype(np.uint8)
-            pygame.surfarray.blit_array(self.map_surface, display_map_uint8)
-        self.screen.blit(pygame.transform.scale(self.map_surface, (self.window_size, self.window_size)), (0, 0))
+        # 2) Create/update self.map_surface from self.display_map each frame
+        self.map_surface = pygame.Surface(self.mapsize)
 
+        # Convert the grayscale display_map to RGB if needed
+        if len(self.display_map.shape) == 2:
+            # Expand single-channel grayscale to three channels
+            display_map_rgb = np.stack([self.display_map]*3, axis=-1)
+        else:
+            # Already three-channel
+            display_map_rgb = self.display_map
 
-        # Draw all foods
+        # Convert to uint8 and blit to self.map_surface
+        display_map_uint8 = display_map_rgb.astype(np.uint8)
+        pygame.surfarray.blit_array(self.map_surface, display_map_uint8)
+
+        # 3) Scale the map image to window_size x window_size
+        scaled_map = pygame.transform.scale(self.map_surface, (self.window_size, self.window_size))
+        self.screen.blit(scaled_map, (0, 0))
+
+        # 4) Compute scaling factors for agent/food coords
+        map_h, map_w = self.mapsize  # e.g. (128, 128)
+        scale_x = self.window_size / map_w
+        scale_y = self.window_size / map_h
+
+        # 5) Draw all plants (foods), scaling (x,y) to screen coords
         for food in self.foods:
+            screen_x = int(food[1] * scale_x)  # food[1] is y
+            screen_y = int(food[0] * scale_y)  # food[0] is x
             pygame.draw.circle(
                 self.screen, 
-                (0, 255, 0),  # Green color for food
-                (int(food[1]), int(food[0])),  # Flip x and y for correct positioning
-                3,  # Food size
+                (0, 255, 0),
+                (screen_x, screen_y),
+                3
             )
 
-        # Initialize font (outside the loop, do this once in your setup code)
+        # 6) Initialize font if not done already
         if not hasattr(self, 'font'):
             self.font = pygame.font.Font(None, 24)
 
-        # Draw all agents
-        for agent in self.agentNames:
-            ag = self.agents[agent]
-            agent_rgb = hsv2rgb(
-                self.species[ag.stats["species"]]["color"],
-                1,
-                0.25 + (1 - ag.life / ag.lifespan) * 0.75,
-            )
+        # 7) Draw agents, scaling their positions
+        for agent_name in self.agentNames:
+            ag = self.agents[agent_name]
 
-            # Convert to integers (assuming hsv2rgb is already in [0, 255])
-            agent_color = tuple(int(channel) for channel in agent_rgb)
+            # Convert HSV to RGB in [0..255]
+            # Hue is stored in self.species[...] ["color"], which is in [0..180]
+            agent_rgb = hsv2rgb(
+                self.species[ag.stats["species"]]["color"], 
+                1.0, 
+                0.25 + (1 - ag.life/ag.lifespan) * 0.75
+            )
+            agent_color = tuple(int(c) for c in agent_rgb)
+
+            # Scale the agent's (x,y) to the screen
+            screen_x = int(ag.y * scale_x)
+            screen_y = int(ag.x * scale_y)
+
+            # Example radius: proportional to agent health within typical range
+            avg_min = self.species[ag.stats["species"]]["genome"]["health"]["min"]
+            avg_max = self.species[ag.stats["species"]]["genome"]["health"]["max"]
+            avg_health = (avg_min + avg_max) / 2
+            health_ratio = ag.health / avg_health
+            radius = max(1, int(health_ratio * min(scale_x, scale_y) * 2))
 
             pygame.draw.circle(
                 self.screen,
-                agent_color,  # Pass the fixed color
-                (int(ag.y), int(ag.x)),
-                ag.health / ((self.species[ag.stats["species"]]["genome"]["health"]["min"] + self.species[ag.stats["species"]]["genome"]["health"]["max"]) / 2),
+                agent_color,
+                (screen_x, screen_y),
+                radius
             )
-            
-            depth_text = str(round(ag.depth))  # Format depth to 2 decimal places
 
-            # Render the text
+            # Optional: draw text (e.g. depth) above the agent
+            depth_text = str(round(ag.depth))
             text_surface = self.font.render(depth_text, True, agent_color)
-            # Blit the text above the agent
-            text_position = (int(ag.y) - 10, int(ag.x) - 20)  # Offset to position above the agent
-            # Render the population graph
-            # if self.graph_surface:
-            #     self.screen.blit(self.graph_surface, (10, 10))  # Position graph in the window
-            self.screen.blit(text_surface, text_position)
+            self.screen.blit(text_surface, (screen_x - 10, screen_y - 20))
 
+        # 8) Finally, draw the population graph overlay (if desired)
         self.draw_population_graph()
+
+        # 9) Flip the display
         pygame.display.flip()
+
+
 
     def close(self):
         print(f"Closing environment Ecosystem at {self.timestep} timestep.")
@@ -291,10 +315,11 @@ class Ecosystem:
         return self.full_population_history
 
     def stepper(self):
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                self.close()
-                return
+        if self.render_mode == "human":
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.close()
+                    return
 
         if len(self.agents) == 0:
             self.close()
@@ -418,9 +443,6 @@ class Ecosystem:
         plt.close(fig)
         
         self.graph_surface = pygame.transform.scale(image, (400, 300))
-
-    def getDistance(self, a_x, a_y, a_d, b_x, b_y, b_d):
-        return np.sqrt((b_x - a_x) ** 2 + (b_y - a_y) ** 2 + (b_d - a_d) ** 2)
 
     def partitionDepthMap(self):
         """Partition the map into chunks and compute min and max depth for each chunk."""

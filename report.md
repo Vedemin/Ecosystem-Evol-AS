@@ -49,13 +49,13 @@ Each agent has a **genome** that defines its numeric attributes. These attribute
 ## **4. The Environment & Core Parameters**
 
 1. **Map**
-   - Defined by `mapsize`, e.g. 128×128 or up to 1200×1200 for a large aquatic area.
+   - Defined by `mapsize`, e.g. 128×128 or1200×1200 for a large aquatic area, this parameter creates a square map. There is technically no limit to this.
    - A depth map loaded from an image (grayscale). The environment normalizes pixel intensities to represent deeper or shallower regions.
    - `min_depth` and `max_depth` define the overall depth range of the entire environment.
 2. **Food (Plants)**
-   - A certain **`starting_plant_population`** seeds the map. Plants **grow** at a rate `plant_growth_speed` and can **spread** new seeds at intervals of `plant_spread_interval` if they’ve reached `plant_minimum_growth_percentage`.
+   - A certain **`starting_plant_population`** seeds the map. Plants **grow** at a rate `plant_growth_speed` per timestep and can **spread** new seeds at intervals of `plant_spread_interval` if they’ve reached `plant_minimum_growth_percentage`.
    - Each spread event adds up to `plant_spread_amount` new plants around the parent in a radius `plant_spread_radius`.
-   - A **global** limit `max_plants_global` caps how many plants can exist, preventing explosive growth.
+   - A **global** limit `max_plants_global` caps how many plants can exist, preventing explosive growth to simulate
 3. **Agents**
    - We can define one or more species with custom parameter ranges. E.g., `hb1` for herbivores, `cv1` for carnivores, an invasive species, etc.
    - `starting_population` indicates how many fish spawn initially (or we define population in each species dictionary).
@@ -64,11 +64,12 @@ Each agent has a **genome** that defines its numeric attributes. These attribute
    - `mutation_factor` controls random variation when two fish breed, so offspring can differ slightly.
 4. **Time & Execution**
    - The simulation runs up to `max_timesteps` or until all fish die. Each step:
-     1. Agents sense surroundings (RayCast, etc.),
-     2. Agents move/eat/attack/breed,
-     3. Plants grow or spread,
+     1. Agents sense surroundings (RayCast, etc.).
+     2. Agents move/eat/attack/breed.
+     3. Plants grow or spread.
      4. Depth damage is applied if fish stray too far from `depth_point`.
-   - We can optionally **render** the environment in a PyGame window (human mode), or run it headless for speed.
+     5. Vitals are checked to see if the fish is supposed to die.
+   - We can optionally **render** the environment in a PyGame window (human mode), or run it without visualization for somewhat better speed.
 
 ---
 
@@ -103,19 +104,18 @@ Each agent has a **genome** that defines its numeric attributes. These attribute
 
 ## **6. Quick Reference: Key Parameters**
 
-| **Parameter**            | **Description**                                                              | **Typical Range**  |
-| ------------------------ | ---------------------------------------------------------------------------- | ------------------ |
-| **mapsize**              | Dimension of the square map in cells (width = height)                        | 128–1200           |
-| **min_depth, max_depth** | Global min/max for water depth in this environment                           | 10–70              |
-| **starting_population**  | Base # of agents (or defined per species)                                    | ~10–60 each        |
-| **food_value**           | Energy a fully grown plant provides                                          | ~200               |
-| **movement_cost_factor** | Multiplies agent’s negative movement cost per step                           | 0.01–0.1           |
-| **max_plants_global**    | Overall plant cap; no new plants spawn above this count                      | 200–1000+          |
-| **plant_spread_amount**  | How many new plants spawn per spread event                                   | 2–10               |
-| **plant_spread_radius**  | Max radius around the plant’s position for new spawns                        | 400–800+           |
-| **egg_incubation_time**  | Steps an egg needs before the agent is active (if used)                      | 100–500 (optional) |
-| **mutation_factor**      | Strength of random variation in offspring stats                              | 0.5–2.0            |
-| **species**              | Dictionary of species definitions (herbivore, carnivore, omnivore, invasive) | Custom logic       |
+| **Parameter**            | **Description**                                                              | **Typical Range**                                 |
+| ------------------------ | ---------------------------------------------------------------------------- | ------------------------------------------------- |
+| **mapsize**              | Dimension of the square map in cells (width = height)                        | 100-2000                                          |
+| **min_depth, max_depth** | Global min/max for water depth in this environment                           | 10–70                                             |
+| **starting_population**  | Base # of agents (or defined per species)                                    | ~10–200 each (heavily resource dependent)         |
+| **food_value**           | Energy a fully grown plant provides                                          | ~50-1000                                          |
+| **movement_cost_factor** | Multiplies agent’s negative movement cost per step                           | 0.01–0.1                                          |
+| **max_plants_global**    | Overall plant cap; no new plants spawn above this count                      | 200–1000+                                         |
+| **plant_spread_amount**  | How many new plants spawn per spread event                                   | 2–10                                              |
+| **plant_spread_radius**  | Max radius around the plant’s position for new spawns                        | 100–800+                                          |
+| **mutation_factor**      | Strength of random variation in offspring stats                              | 0.01–2.0                                          |
+| **species**              | Dictionary of species definitions (herbivore, carnivore, omnivore, invasive) | Custom species with genomes and requested visuals |
 
 ---
 
@@ -128,3 +128,22 @@ With these definitions, our **agent-based** ecosystem can exhibit a range of out
 - **Invasive species** introduction leading to disruption or total takeover.
 
 The next sections will delve deeper into how we built, tested, and analyzed these interactions.
+
+---
+
+# **Part 2: Description of Works**
+
+We developed this simulation by **adapting** an existing **Multi-Agent Reinforcement Learning (MARL) ecosystem** (built with PettingZoo) into a **pure agent-based** simulation. Instead of learning policies, each fish now follows simple decision rules for movement, feeding, breeding, and so forth.
+
+One of our **major tasks** was restructuring the environment to **directly** run agent logic each step: rather than agents learning from rewards, they behave according to species-defined stats (speed, bite range, memory, etc.). Because we also introduced **multiple species** (herbivores, carnivores, omnivores, and an invasive type) on a **large map** , the code became **performance-heavy** . Each timestep, we run line-of-sight checks and update plant growth across potentially thousands of cells—scaling up quickly with bigger maps and populations.
+
+Despite these overheads, the final simulation can handle:
+
+1. A **large** or very detailed map (e.g., 1200×1200),
+2. Complex **interactions** among many agents,
+3. Plant growth/spreading with a **global limit** on plants,
+4. Depth constraints ensuring fish remain in valid water columns.
+
+Overall, our focus was ensuring realistic agent-based dynamics—where each fish has intuitive actions—while wrestling with the **cost** of repeated distance calculations and update loops. The outcome is a **flexible** simulation platform for exploring how an ecosystem with multiple feeding strategies, including an **invasive species** , might unfold.
+
+---

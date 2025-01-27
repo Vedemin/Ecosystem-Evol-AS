@@ -2,7 +2,9 @@ import numpy as np
 import random
 from copy import copy
 import cv2
-import colorsys
+import json
+from datetime import datetime
+import os
 import pygame
 from Utils import *
 from Agent import Agent
@@ -29,7 +31,6 @@ default_params = {
     "mapsize": 128,
     "min_depth": 10,
     "max_depth": 30,
-    "starting_population": 15,
     "food_value": 200,
     "movement_cost": -1,
     "food_per_agent": 2,
@@ -114,7 +115,6 @@ class Ecosystem:
             "mapsize": 128,
             "min_depth": 10,
             "max_depth": 30,
-            "starting_population": 15,
             "food_value": 200,
             "movement_cost": -1,
             "food_per_agent": 2,
@@ -129,8 +129,12 @@ class Ecosystem:
             "plant_spread_radius": 400,
             "plant_spread_interval": 500,
             "max_plants_global": 200,
+            "minimum_plant_percentage": 0.05,
         }
         self.species = species
+        self.species_counter = {}
+        for species in self.species:
+            self.species_counter[species] = 0
 
         for key in params:
             if key in self.params:
@@ -169,17 +173,11 @@ class Ecosystem:
         )
         self.depth_partition_precision = 4
 
-        self.possible_agents = [
-            f"a_{i}" for i in range(self.params["starting_population"])
-        ]
         self.possible_agents = []
         for species, data in self.species.items():
             for i in range(data["population"]):
-                self.possible_agents.append(f"{species}_agent_{i}")
+                self.possible_agents.append(f"{species}_a{i}")
         
-        self.foodAmount = (
-            self.params["starting_population"] * self.params["food_per_agent"]
-        )
         self.egg_incubation_time = self.params["egg_incubation_time"]
         self.agents = {}
         self.foods = []
@@ -208,6 +206,7 @@ class Ecosystem:
         self.finished = False
         self.full_population_history = {species: [(0, 0)] for species in self.species.keys()}
         self.max_history_length = 200
+        self.save_frequency = 200
 
     def reset(self, seed=None, options=None):
         self.agentNames = copy(self.possible_agents)
@@ -215,44 +214,36 @@ class Ecosystem:
         self.map = np.zeros(self.mapsize)
         self.foods = []
         self.finished = False
-        # This function starts the world:
-        # loads the map from image,
-        # spawns agents and generates food
         self.generateMap()
+
+        self.run_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        self.history_dir = os.path.join("history_logs", f"run_{self.run_timestamp}")
+        os.makedirs(self.history_dir, exist_ok=True)
+        self.agent_file_counter = 0
+        self.plant_file_counter = 0
         return
 
     def render(self):
-        # 1) Clear the screen to black
         self.screen.fill((0, 0, 0))
-
-        # 2) Create/update self.map_surface from self.display_map each frame
         self.map_surface = pygame.Surface(self.mapsize)
-
-        # Convert the grayscale display_map to RGB if needed
         if len(self.display_map.shape) == 2:
-            # Expand single-channel grayscale to three channels
             display_map_rgb = np.stack([self.display_map]*3, axis=-1)
         else:
-            # Already three-channel
             display_map_rgb = self.display_map
 
-        # Convert to uint8 and blit to self.map_surface
         display_map_uint8 = display_map_rgb.astype(np.uint8)
         pygame.surfarray.blit_array(self.map_surface, display_map_uint8)
 
-        # 3) Scale the map image to window_size x window_size
         scaled_map = pygame.transform.scale(self.map_surface, (self.window_size, self.window_size))
         self.screen.blit(scaled_map, (0, 0))
 
-        # 4) Compute scaling factors for agent/food coords
-        map_h, map_w = self.mapsize  # e.g. (128, 128)
+        map_h, map_w = self.mapsize
         scale_x = self.window_size / map_w
         scale_y = self.window_size / map_h
 
-        # 5) Draw all plants (foods), scaling (x,y) to screen coords
         for food in self.foods:
-            screen_x = int(food[1] * scale_x)  # food[1] is y
-            screen_y = int(food[0] * scale_y)  # food[0] is x
+            screen_x = int(food[1] * scale_x)
+            screen_y = int(food[0] * scale_y)
             pygame.draw.circle(
                 self.screen, 
                 (0, 255, 0),
@@ -260,28 +251,20 @@ class Ecosystem:
                 3
             )
 
-        # 6) Initialize font if not done already
         if not hasattr(self, 'font'):
             self.font = pygame.font.Font(None, 24)
 
-        # 7) Draw agents, scaling their positions
         for agent_name in self.agentNames:
             ag = self.agents[agent_name]
-
-            # Convert HSV to RGB in [0..255]
-            # Hue is stored in self.species[...] ["color"], which is in [0..180]
             agent_rgb = hsv2rgb(
                 self.species[ag.stats["species"]]["color"], 
                 1.0, 
                 0.25 + (1 - ag.life/ag.lifespan) * 0.75
             )
             agent_color = tuple(int(c) for c in agent_rgb)
-
-            # Scale the agent's (x,y) to the screen
             screen_x = int(ag.y * scale_x)
             screen_y = int(ag.x * scale_y)
 
-            # Example radius: proportional to agent health within typical range
             avg_min = self.species[ag.stats["species"]]["genome"]["health"]["min"]
             avg_max = self.species[ag.stats["species"]]["genome"]["health"]["max"]
             avg_health = (avg_min + avg_max) / 2
@@ -295,15 +278,11 @@ class Ecosystem:
                 radius
             )
 
-            # Optional: draw text (e.g. depth) above the agent
             depth_text = str(round(ag.depth))
             text_surface = self.font.render(depth_text, True, agent_color)
             self.screen.blit(text_surface, (screen_x - 10, screen_y - 20))
 
-        # 8) Finally, draw the population graph overlay (if desired)
         self.draw_population_graph()
-
-        # 9) Flip the display
         pygame.display.flip()
 
 
@@ -332,6 +311,10 @@ class Ecosystem:
 
         self.agent_history.append(copy(self.agents))
         self.plant_history.append(copy(self.foods))
+
+        if len(self.agent_history) >= self.save_frequency:
+            self.save_and_clear_history()
+
         for species in self.species.keys():
             population = sum(1 for agent in self.agents.values() if agent.stats["species"] == species)
             total_movement_cost = sum(
@@ -345,10 +328,7 @@ class Ecosystem:
             if len(history) > self.max_history_length:
                 history.pop(0)
 
-        ## Changes start
-        # Update plant growth + spreading each step
         self.updatePlants()
-        ## Changes end
 
         if self.render_mode == "human":
             self.render()
@@ -356,6 +336,34 @@ class Ecosystem:
 
         self.timestep += 1
 
+    def save_and_clear_history(self):
+        # Save entire agent history to a new JSON file
+        agent_file_path = os.path.join(
+            self.history_dir, f"agenthistory{self.agent_file_counter}.json"
+        )
+        with open(agent_file_path, 'w') as agent_file:
+            # Use `to_dict` to serialize agents
+            json.dump(
+                [
+                    {agent_id: agent.to_dict() for agent_id, agent in agents.items()}
+                    for agents in self.agent_history
+                ],
+                agent_file
+            )
+        self.agent_file_counter += 1
+
+        # Save entire plant history to a new JSON file
+        plant_file_path = os.path.join(
+            self.history_dir, f"planthistory{self.plant_file_counter}.json"
+        )
+        with open(plant_file_path, 'w') as plant_file:
+            # Dump the entire plant history in one go
+            json.dump(self.plant_history, plant_file)
+        self.plant_file_counter += 1
+
+        # Clear in-memory history
+        self.agent_history.clear()
+        self.plant_history.clear()
 
     def draw_population_graph(self):
         pygame.draw.rect(
@@ -407,6 +415,10 @@ class Ecosystem:
         # the actual "food" when they eat (handled in Agent class).
         ## Changes end
         """
+        plant_percentage = len(self.foods) / self.params["starting_plant_population"]
+        if plant_percentage < self.params["minimum_plant_percentage"]:
+            self.generateNewFood(self.params["minimum_plant_percentage"] - plant_percentage)
+
         for i, plant in enumerate(self.foods):
             x, y, depth, growth_pct, spread_t = plant
 
@@ -497,7 +509,7 @@ class Ecosystem:
 
     def cstCoord(
         self, x, y
-    ):  # Constrain the passed coordinates so they don't exceed the map
+    ):
         if x > self.mapsize[0] - 1:
             x = self.mapsize[0] - 1
         elif x < 0:
@@ -510,23 +522,20 @@ class Ecosystem:
 
     ############################################################################################################
 
-    def gridRInt(self, xy):  # Returns random int in the map axis limit
+    def gridRInt(self, xy):
         if xy == "y":
             return float(random.randint(0, self.mapsize[0] - 1))
         else:
             return float(random.randint(0, self.mapsize[1] - 1))
 
     def generateMap(self):
-        # Loads map file and converts it to a discrete terrain map
         scaling_factor = (self.max_depth - self.min_depth) / 255.0
         self.map = ((255 - self.display_map) * scaling_factor + self.min_depth).astype(np.int16)
         self.chunk_min_depth = []
         self.chunk_max_depth = []
         print(self.map)
-
         self.generateNewFood()
 
-        # Generate agents
         for agentID in self.agentNames:
             x = self.gridRInt("x")
             y = self.gridRInt("y")
@@ -542,19 +551,17 @@ class Ecosystem:
 
     ############################################################################################################
 
-    # Check how much food is present and generate what is missing
-    def generateNewFood(self):
+    def generateNewFood(self, multiplier=1.0):
         """
         Spawns self.params["starting_plant_population"] plants (global limit).
         One-third of them at a random initial growth percentage, the remaining
         two-thirds at full (1.0) growth.
         We stop spawning if we reach or exceed self.params["max_plants_global"].
         """
-        total_plants = self.params["starting_plant_population"]
+        total_plants = int(self.params["starting_plant_population"] * multiplier)
         threshold = total_plants // 3  # One-third
 
         for i in range(total_plants):
-            # Check global maximum
             if len(self.foods) >= self.params["max_plants_global"]:
                 break
 
@@ -562,16 +569,12 @@ class Ecosystem:
             y = self.gridRInt("y")
             depth_point = float(self.map[int(x)][int(y)])
 
-            # Decide growth percentage
             if i < threshold:
                 initial_growth = random.uniform(0.0, 1.0)
             else:
                 initial_growth = 1.0
-
-            # Random spread timer so not all plants spread simultaneously
             spread_timer = random.randint(1, self.params["plant_spread_interval"])
 
-            # Append the plant if we're under the global limit
             self.foods.append([x, y, depth_point, initial_growth, spread_timer])
 
 
@@ -582,7 +585,6 @@ class Ecosystem:
         maximum (max_plants_global).
         """
         for _ in range(self.params["plant_spread_amount"]):
-            # Check global maximum
             if len(self.foods) >= self.params["max_plants_global"]:
                 break
 
@@ -591,29 +593,24 @@ class Ecosystem:
             nx = px + r * np.cos(theta)
             ny = py + r * np.sin(theta)
 
-            # Must be in map bounds
             if 0 < nx < self.mapsize[0] - 1 and 0 < ny < self.mapsize[1] - 1:
-                # Depth is the local terrain minus 1
                 new_depth = float(self.map[int(nx)][int(ny)]) - 1
 
-                # Add the new plant
                 self.foods.append([
                     nx, ny, new_depth,
-                    0.0,  # starts at zero growth
+                    0.0,
                     self.params["plant_spread_interval"]
                 ])
-
-
-
 
     ############################################################################################################
 
     def createNewAgent(self, x, y, d, agentID, is_new, genome=default_genome):
         life_start = 0
-        if is_new:
+        if is_new or agentID not in self.agentNames:
             life_start = np.random.uniform(0.1, 0.5)
             self.agentNames.append(agentID)
         species_data = self.species[genome["species"]]
+        self.species_counter[genome["species"]] += 1
         self.agents[agentID] = Agent(
             agentID, [x, y, d], genome, avg_lifespan=species_data["genome"]["lifespan"], life_start_point=life_start, debug=self.debug
         )
@@ -642,7 +639,7 @@ class Ecosystem:
                     genome_ranges.get("armor", {"min": 0.0, "max": 10.0})["max"]
                 ) - 5, 2), 0
             ),
-            "lifespan": genome_ranges.get("lifespan", 5000),  # You might want to make this configurable in the genome
+            "lifespan": genome_ranges.get("lifespan", 5000),
             "egg_lifespan_required": genome_ranges.get("egg_lifespan_required", 0.2),
             "bite_damage": round(random.uniform(
                 genome_ranges.get("bite_damage", {"min": 10.0, "max": 60.0})["min"], 

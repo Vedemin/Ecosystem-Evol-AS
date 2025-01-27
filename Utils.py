@@ -3,9 +3,7 @@ import colorsys
 import math
 from numba import njit
 
-# @njit
-def RayCast(env, a_x, a_y, a_d, b_x, b_y, b_d, sight_distance):
-    def getChunksIntersected(a_x, a_y, b_x, b_y, chunk_size):
+def getChunksIntersected(a_x, a_y, b_x, b_y, chunk_size):
         """Calculate the chunks intersected by the line from (a_x, a_y) to (b_x, b_y)."""
         chunks = []
         x0, y0 = int(a_x // chunk_size), int(a_y // chunk_size)
@@ -28,6 +26,11 @@ def RayCast(env, a_x, a_y, a_d, b_x, b_y, b_d, sight_distance):
                 err += dx
                 y0 += sy
         return chunks
+
+# @njit
+def RayCast(env, a_x, a_y, a_d, b_x, b_y, b_d, sight_distance):
+    if abs(a_x - b_x) + abs(a_y - b_y) + abs(a_d - b_d) > sight_distance * math.sqrt(3):
+        return False, 10000
 
     dist = GetDistance(a_x, a_y, a_d, b_x, b_y, b_d)
     if dist > sight_distance:

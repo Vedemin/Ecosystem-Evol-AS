@@ -36,7 +36,7 @@ class Agent:
         self.life_factor = self.LifeFactor(None)
         self.speed = self.stats["speed"] * self.life_factor
         self.stomach_size = self.stats["stomach_size"] * self.life_factor
-        self.food = self.stomach_size
+        self.food = self.stomach_size / 3
         self.type = self.stats["type"]
         self.depth_min = genome["depth_point"] - genome["depth_tolerance_range"]
         self.depth_max = genome["depth_point"] + genome["depth_tolerance_range"]
@@ -59,12 +59,12 @@ class Agent:
         self.egg_permitted = 0
         self.breeding_lifespan_threshold = self.stats["egg_lifespan_required"] * avg_lifespan
         self.patrolPoint = [-1, -1, -1]
-        self.invisibleVictim = None       # Name of the agent that is invisible to me
-        self.invisibleVictimMemory = 0    # Memory countdown for invisible victim
+        self.invisibleVictim = None
+        self.invisibleVictimMemory = 0
 
     def LifeFactor(self, env):
         if self.life >= self.lifespan:
-            self.Die(env)
+            self.CheckVitals(env)
 
         t1 = 0.2 * self.lifespan
         t2 = 0.6 * self.lifespan
@@ -78,6 +78,8 @@ class Agent:
         return 0.001
 
     def Activate(self, env):
+        if self.name not in env.agentNames:
+            env.agentNames.append(self.name)
         self.life_factor = self.LifeFactor(env)
         self.speed = self.stats["speed"] * self.life_factor
         self.stomach_size = self.stats["stomach_size"] * self.life_factor
@@ -178,12 +180,12 @@ class Agent:
                     self.remembered_agent = None
             return
         
-        if self.memory <= 0 or self.closest_food not in env.foods:
+        if -10 < self.memory <= 0 or self.closest_food not in env.foods:
             if self.debug:
                 print(
                     f"[{self.name}] Forgetting closest food: Memory {self.memory} or food no longer available."
                 )
-            self.memory = 0
+            self.memory = -10
             self.closest_food_distance = 100000
             self.closest_food = [
                 self.closest_food_distance,
@@ -424,39 +426,33 @@ class Agent:
     def PatrolLogic(self, env):
         """Handle patrol behavior for all types of agents."""
 
-        # If we have no patrol point yet, pick a valid one
         if self.patrolPoint == [-1, -1, -1]:
             if self.debug:
                 print(f"[{self.name}] No patrol point found: Assigning a new one.")
             new_pt = self.findValidPatrolPoint(env)
             if new_pt == [-1, -1, -1]:
-                # Could not find a valid patrol point; do nothing or assign something safe
                 if self.debug:
                     print(f"[{self.name}] Could not find valid patrol point. Skipping patrol.")
                 return
             else:
                 self.patrolPoint = new_pt
 
-        # Calculate distance to current patrol point
         distToPatrol = GetDistance(
             self.x, self.y, self.depth,
             self.patrolPoint[0], self.patrolPoint[1], self.patrolPoint[2]
         )
 
-        # If we're close, pick a new patrol point
         if distToPatrol <= 1:
             if self.debug:
                 print(f"[{self.name}] Reached patrol point: Assigning a new one.")
             new_pt = self.findValidPatrolPoint(env)
             if new_pt == [-1, -1, -1]:
-                # no valid point found
                 if self.debug:
                     print(f"[{self.name}] No valid new patrol point found. Staying put.")
                 return
             self.patrolPoint = new_pt
 
         else:
-            # Move toward the existing patrol point
             if self.debug:
                 print(f"[{self.name}] Patrolling to current patrol point {self.patrolPoint}")
             self.Move(self.MovementVector(GetFoodVector(self, self.patrolPoint)), env)
@@ -490,15 +486,19 @@ class Agent:
         mutationFactor = env.params["mutation_factor"]
         newGenome = self.NewGenome(env, partner, mutationFactor)
 
-        offspring_name = f"{self.name}-{partner.name}-c{env.timestep}"
-        env.createNewAgent(
-            (self.x + partner.x) / 2,
-            (self.y + partner.y) / 2,
-            (self.depth + partner.depth) / 2,
-            offspring_name,
-            True,
-            newGenome,
-        )
+        amount = env.species[self.stats["species"]]["spawn_count"]
+        if amount > 1:
+            amount = np.random.randint(1, env.species[self.stats["species"]]["spawn_count"])
+        for i in range(amount):
+            offspring_name = f"{self.stats['species']}-{env.species_counter[self.stats['species']]}-{i}"
+            env.createNewAgent(
+                (self.x + partner.x) / 2,
+                (self.y + partner.y) / 2,
+                (self.depth + partner.depth) / 2,
+                offspring_name,
+                True,
+                newGenome,
+            )
 
         self.food -= self.stats["stomach_size"] / 3
         partner.food -= partner.stats["stomach_size"] / 3
@@ -535,7 +535,7 @@ class Agent:
 
         if self.invisibleVictim != target.name:
             self.invisibleVictim = target.name
-            self.invisibleVictimMemory = int(self.stats["memory"])
+            self.invisibleVictimMemory = 20
 
     def GetDamaged(self, env, amount):
         damage = amount - self.stats["armor"]
@@ -632,13 +632,10 @@ class Agent:
         Returns: [x, y, valid_depth] or [-1, -1, -1] if no valid location is found.
         """
         for _ in range(max_tries):
-            rx = env.gridRInt("x")  # random X within map
-            ry = env.gridRInt("y")  # random Y within map
+            rx = env.gridRInt("x")
+            ry = env.gridRInt("y")
             seabed_depth = env.map[int(rx), int(ry)]
 
-            # The agent wants a depth range within [self.depth_min .. self.depth_max],
-            # also must be above the seabed (so <= seabed_depth-1).
-            # Also the environment might have a global "min_depth" to consider.
             local_min_depth = max(self.depth_min, env.params["min_depth"])
             local_max_depth = min(self.depth_max, seabed_depth - 1)
 
@@ -646,5 +643,24 @@ class Agent:
                 chosen_depth = np.random.uniform(local_min_depth, local_max_depth)
                 return [rx, ry, chosen_depth]
 
-        # If no valid point found
         return [-1, -1, -1]
+
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "stats": self.stats,
+            "health": self.health,
+            "lifespan": self.lifespan,
+            "life_factor": self.life_factor,
+            "speed": self.speed,
+            "stomach_size": self.stomach_size,
+            "food": self.food,
+            "type": self.type,
+            "depth_min": self.depth_min,
+            "depth_max": self.depth_max,
+            "movement_cost": self.movement_cost,
+            "x": self.x,
+            "y": self.y,
+            "depth": self.depth,
+            "egg_permitted": self.egg_permitted,
+        }

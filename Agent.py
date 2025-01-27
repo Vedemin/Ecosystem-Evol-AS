@@ -23,6 +23,18 @@ class Agent:
     def __init__(
         self, name, position, genome=default_genome, avg_lifespan=5000, life_start_point=0, debug=False
     ):
+        """
+        Initializes an Agent object with specific attributes such as position, genome, and starting parameters. 
+        Sets up the agent's life, speed, health, depth range, and initial food levels.
+
+        Parameters:
+        - name: Unique name or identifier for the agent.
+        - position: A list or tuple specifying the agent's starting x, y, and depth coordinates.
+        - genome: A dictionary containing genetic traits of the agent, such as speed, health, and feeding range.
+        - avg_lifespan: Average lifespan of the species, used to calculate specific lifespan for the agent.
+        - life_start_point: Proportion of life already completed at initialization (0 to 1).
+        - debug: Boolean flag to enable or disable debug messages for the agent.
+        """
         self.debug = debug
         if self.debug:
             print(genome)
@@ -63,6 +75,16 @@ class Agent:
         self.invisibleVictimMemory = 0
 
     def LifeFactor(self, env):
+        """
+        Calculates a life factor that scales certain attributes (e.g., speed, stomach size) based on the agent's current age. 
+        The factor varies over the agent's lifespan, with reduced efficiency at the start and end of life.
+
+        Parameters:
+        - env: The simulation environment, required for interaction with the agent.
+
+        Returns:
+        - Float: The life factor, ranging from 0.001 to 1.0, depending on the agent's life stage.
+        """
         if self.life >= self.lifespan:
             self.CheckVitals(env)
 
@@ -78,6 +100,13 @@ class Agent:
         return 0.001
 
     def Activate(self, env):
+        """
+        Performs the agent's actions during a simulation step, including calculating distances, selecting actions, 
+        applying depth damage, and updating the agent's state.
+
+        Parameters:
+        - env: The simulation environment containing other agents, plants, and environmental settings.
+        """
         if self.name not in env.agentNames:
             env.agentNames.append(self.name)
         self.life_factor = self.LifeFactor(env)
@@ -97,6 +126,13 @@ class Agent:
                 self.invisibleVictim = None
 
     def CalculateDistances(self, env):
+        """
+        Calculates distances between the agent and other agents or food in its vicinity. Determines visible entities based 
+        on the agent's eyesight range and updates the closest food, potential mates, and threats.
+
+        Parameters:
+        - env: The simulation environment containing other agents and plants.
+        """
         eyesight_range = self.stats["eyesight_range"] * self.life_factor
 
         for name, agent in env.agents.items():
@@ -231,6 +267,15 @@ class Agent:
                     self.closest_food = [100000, 100000, 100000]
 
     def MovementVector(self, vector):
+        """
+        Scales a movement vector to ensure that its magnitude does not exceed the agent's speed.
+
+        Parameters:
+        - vector: A list or tuple representing the x, y, and depth components of the movement.
+
+        Returns:
+        - List: A scaled movement vector within the agent's speed limit.
+        """
         vector_mag = VectorMagnitude(vector)
         if vector_mag <= self.speed:
             return vector
@@ -238,6 +283,12 @@ class Agent:
         return [result[0] * self.speed, result[1] * self.speed, result[2] * self.speed]
 
     def SelectAction(self, env):
+        """
+        Chooses the appropriate action for the agent based on its current state, such as running away, breeding, or foraging.
+
+        Parameters:
+        - env: The simulation environment containing agents, plants, and environmental settings.
+        """
         if self.IsThreatened(env):
             self.RunAway(env)
         elif self.IsBreeding(env):
@@ -247,6 +298,15 @@ class Agent:
         self.CheckVitals(env)
 
     def IsThreatened(self, env):
+        """
+        Determines whether the agent is under threat from nearby carnivores or omnivores.
+
+        Parameters:
+        - env: The simulation environment containing agents and their attributes.
+
+        Returns:
+        - Boolean: True if the agent is threatened, otherwise False.
+        """
         if self.type != "herbivore":
             return False
             
@@ -263,6 +323,13 @@ class Agent:
         return False
 
     def RunAway(self, env):
+        """
+        Executes a fleeing behavior to move the agent away from the closest threat. Calculates a vector away from the threat 
+        and moves the agent accordingly, staying within valid depth ranges.
+
+        Parameters:
+        - env: The simulation environment containing agents and environmental depth data.
+        """
         closest_threat = None
         closest_distance = float('inf')
         
@@ -310,6 +377,13 @@ class Agent:
         self.Move(final_vector, env) 
 
     def HerbivoreBehavior(self, env):
+        """
+        Defines the behavior of herbivores, including eating plants, moving toward food, and recalling food locations from memory. 
+        If no food is found, the agent defaults to patrolling.
+
+        Parameters:
+        - env: The simulation environment containing plants and environmental settings.
+        """
         if self.closest_food_distance < self.stats["feed_range"] * self.life_factor:
             if self.debug:
                 print(
@@ -337,7 +411,13 @@ class Agent:
             self.PatrolLogic(env)
 
     def AgentBehavior(self, env):
-        """Define the behavior of an agent based on its type."""
+        """
+        Defines the general behavior for an agent based on its type (herbivore, carnivore, or omnivore). 
+        Calls the corresponding behavior function for the agent type.
+
+        Parameters:
+        - env: The simulation environment containing agents and environmental settings.
+        """
         if self.type == "herbivore":
             self.HerbivoreBehavior(env)
         elif self.type == "carnivore":
@@ -346,6 +426,13 @@ class Agent:
             self.OmnivoreBehavior(env)
 
     def CarnivoreBehavior(self, env):
+        """
+        Defines the behavior of carnivores, including attacking prey, moving toward visible agents, and recalling prey locations from memory. 
+        If no prey is found, the agent defaults to patrolling.
+
+        Parameters:
+        - env: The simulation environment containing agents and environmental settings.
+        """
         if self.closest_agent_distance < self.stats["bite_range"] * self.life_factor and self.stomach_size - self.food < self.stats["bite_damage"]:
             if self.debug:
                 print(
@@ -376,6 +463,13 @@ class Agent:
             self.PatrolLogic(env)
 
     def OmnivoreBehavior(self, env):
+        """
+        Defines the behavior of omnivores, which includes eating plants, attacking prey, moving toward food or agents, and recalling 
+        locations from memory. Omnivores alternate between herbivore and carnivore behaviors based on food availability.
+
+        Parameters:
+        - env: The simulation environment containing agents, plants, and environmental settings.
+        """
         if self.closest_agent_distance < self.stats["attack_range"] * self.life_factor:
             if self.debug:
                 print(
@@ -424,8 +518,13 @@ class Agent:
             self.PatrolLogic(env)
 
     def PatrolLogic(self, env):
-        """Handle patrol behavior for all types of agents."""
+        """
+        Handles patrol behavior for agents when no specific action (e.g., eating, attacking, breeding) is required. 
+        Assigns new patrol points and moves the agent toward them.
 
+        Parameters:
+        - env: The simulation environment containing agents and environmental settings.
+        """
         if self.patrolPoint == [-1, -1, -1]:
             if self.debug:
                 print(f"[{self.name}] No patrol point found: Assigning a new one.")
@@ -457,10 +556,14 @@ class Agent:
                 print(f"[{self.name}] Patrolling to current patrol point {self.patrolPoint}")
             self.Move(self.MovementVector(GetFoodVector(self, self.patrolPoint)), env)
 
-
-
     def BreedingBehavior(self, env):
-        """Define the behavior for breeding."""
+        """
+        Defines the behavior for agents ready to breed. Moves the agent toward a visible mate or switches to a default behavior 
+        if no mate is found.
+
+        Parameters:
+        - env: The simulation environment containing agents and environmental settings.
+        """
         if self.debug:
             print(f"[{self.name}] Choosing Breeding Behavior: Agent is ready to breed.")
         if self.possible_mate is not None:
@@ -480,6 +583,14 @@ class Agent:
             self.HerbivoreBehavior(env)
 
     def Mate(self, env, partner):
+        """
+        Handles the mating process between two agents, generating offspring with a blended genome and mutation. 
+        Consumes food resources for both agents and resets their breeding timers.
+
+        Parameters:
+        - env: The simulation environment containing agents and environmental settings.
+        - partner: The agent's breeding partner.
+        """
         if not self.IsMate(env, partner):
             return
 
@@ -507,12 +618,26 @@ class Agent:
         partner.egg_permitted = 0
 
     def Move(self, vector, env):
+        """
+        Moves the agent by applying the given movement vector and deducts the movement cost from the agent's food supply.
+
+        Parameters:
+        - vector: A list or tuple representing the movement in x, y, and depth directions.
+        - env: The simulation environment containing agents and environmental settings.
+        """
         self.food += self.movement_cost * env.params["movement_cost_factor"]
         self.x += vector[0]
         self.y += vector[1]
         self.depth += vector[2]
 
     def Eat(self, env):
+        """
+        Consumes a plant located at the agent's current position. Increases the agent's food and health based on the plant's 
+        growth percentage and removes the plant from the environment.
+
+        Parameters:
+        - env: The simulation environment containing plants and their attributes.
+        """
         growth_percentage = self.closest_food[3]
         food_energy = env.params["food_value"] * growth_percentage
 
@@ -529,6 +654,14 @@ class Agent:
             env.foods.remove(self.closest_food)
 
     def Attack(self, env, target):
+        """
+        Executes an attack on a target agent. Transfers food from the target to the attacking agent and marks the target as an 
+        "invisible victim" to prevent immediate re-attack.
+
+        Parameters:
+        - env: The simulation environment containing agents.
+        - target: The agent being attacked.
+        """
         self.food += target.GetDamaged(env, self.stats["bite_damage"])
         if self.food > self.stomach_size:
             self.food = self.stomach_size
@@ -538,6 +671,17 @@ class Agent:
             self.invisibleVictimMemory = 20
 
     def GetDamaged(self, env, amount):
+        """
+        Applies damage to the agent based on the specified amount, reduced by the agent's armor. 
+        If the agent's health drops to zero or below, it triggers the death process.
+
+        Parameters:
+        - env: The simulation environment containing agents.
+        - amount: The amount of damage to apply.
+
+        Returns:
+        - Float: The actual amount of damage taken by the agent.
+        """
         damage = amount - self.stats["armor"]
         if damage > 0:
             self.health -= damage
@@ -547,7 +691,13 @@ class Agent:
         return damage
 
     def ApplyDepthDamage(self, env):
-        """Apply damage if the agent is outside its depth tolerance range."""
+        """
+        Applies incremental damage to the agent if it moves outside its depth tolerance range. 
+        The damage is proportional to the distance from the depth limit.
+
+        Parameters:
+        - env: The simulation environment containing depth data.
+        """
         if self.depth < self.depth_min:
             damage = (self.depth_min - self.depth) / self.stats[
                 "depth_tolerance_range"
@@ -560,6 +710,13 @@ class Agent:
             self.GetDamaged(env, damage)
 
     def CheckVitals(self, env):
+        """
+        Checks the agent's vital statistics, including health, food levels, and lifespan. 
+        Triggers the death process if any of these drop below critical thresholds.
+
+        Parameters:
+        - env: The simulation environment containing agents and environmental settings.
+        """
         if self.health <= 0:
             if self.debug:
                 print(f"[{self.name}] Died due to health=0")
@@ -576,10 +733,26 @@ class Agent:
             self.Die(env, "old age")
 
     def Die(self, env, reason="unknown"):
+        """
+        Handles the death of the agent, removing it from the environment and logging the reason for its death.
+
+        Parameters:
+        - env: The simulation environment containing agents.
+        - reason: The cause of death (e.g., starvation, old age, or attack).
+        """
         env.KillAgent(self.name, reason)
 
 
     def IsBreeding(self, env):
+        """
+        Determines if the agent is ready to breed based on its food levels and breeding timer.
+
+        Parameters:
+        - env: The simulation environment containing agents.
+
+        Returns:
+        - Boolean: True if the agent is ready to breed, otherwise False.
+        """
         if (
             self.egg_permitted >= self.breeding_lifespan_threshold * 0.3
             and self.food >= self.stomach_size / 2
@@ -588,11 +761,32 @@ class Agent:
         return False
 
     def IsMate(self, env, agent):
+        """
+        Determines if another agent is a suitable mate for breeding based on species and readiness.
+
+        Parameters:
+        - env: The simulation environment containing agents.
+        - agent: The potential mate to evaluate.
+
+        Returns:
+        - Boolean: True if the agent is a suitable mate, otherwise False.
+        """
         if self.stats["type"] == agent.stats["type"] and agent.IsBreeding(env):
             return True
         return False
 
     def NewGenome(self, env, partner, mutationFactor):
+        """
+        Generates a new genome for offspring by blending the genomes of the parent agents and applying mutations.
+
+        Parameters:
+        - env: The simulation environment containing agents.
+        - partner: The other parent agent.
+        - mutationFactor: The strength of random variation applied to the offspring's genome.
+
+        Returns:
+        - Dictionary: The new genome for the offspring.
+        """
         newGenome = {}
         for gene, x1 in self.stats.items():
             if isinstance(x1, str):
@@ -627,9 +821,14 @@ class Agent:
 
     def findValidPatrolPoint(self, env, max_tries=100):
         """
-        Attempt to find a random x,y such that the local seabed is deep enough
-        for this agent's [depth_min, depth_max].
-        Returns: [x, y, valid_depth] or [-1, -1, -1] if no valid location is found.
+        Attempts to find a valid patrol point within the environment that satisfies the agent's depth constraints.
+
+        Parameters:
+        - env: The simulation environment containing depth data.
+        - max_tries: The maximum number of attempts to find a valid patrol point.
+
+        Returns:
+        - List: A list containing the x, y, and depth of the patrol point, or [-1, -1, -1] if no valid point is found.
         """
         for _ in range(max_tries):
             rx = env.gridRInt("x")
@@ -646,6 +845,12 @@ class Agent:
         return [-1, -1, -1]
 
     def to_dict(self):
+        """
+        Converts the agent's attributes into a dictionary for logging or serialization purposes.
+
+        Returns:
+        - Dictionary: A dictionary representation of the agent's attributes and current state.
+        """
         return {
             "name": self.name,
             "stats": self.stats,

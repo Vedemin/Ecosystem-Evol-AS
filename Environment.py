@@ -23,8 +23,8 @@ default_genome = {
     "feed_range": 3.0,
     "bite_range": 3.0,
     "memory": 20,
-    "depth_point": 20.0,  # Mean depth where the fish lives
-    "depth_tolerance_range": 15.0,  # Range above and below the mean depth
+    "depth_point": 20.0,
+    "depth_tolerance_range": 15.0,
 }
 
 default_params = {
@@ -56,14 +56,14 @@ default_species = {
         "genome": {
             "speed": {"min": 1.0, "max": 6.0},
             "health": {"min": 170.0, "max": 340.0},
-            "stomach_size": {"min": 100.0, "max": 150.0},  # Moderate stomach size
-            "armor": {"min": 0.0, "max": 5.0},  # Relatively low armor
-            "bite_damage": {"min": 5.0, "max": 20.0},  # Low bite damage for herbivores
-            "eyesight_range": {"min": 30.0, "max": 80.0},  # Moderate eyesight
-            "feed_range": {"min": 3.0, "max": 4.0},  # Moderate feeding range
-            "bite_range": {"min": 2.0, "max": 3.0},  # Moderate bite range
-            "memory": {"min": 15, "max": 25},  # Moderate memory
-            "depth_tolerance_range": {"min": 5, "max": 15}  # Moderate depth tolerance
+            "stomach_size": {"min": 100.0, "max": 150.0},
+            "armor": {"min": 0.0, "max": 5.0},
+            "bite_damage": {"min": 5.0, "max": 20.0},
+            "eyesight_range": {"min": 30.0, "max": 80.0},
+            "feed_range": {"min": 3.0, "max": 4.0},
+            "bite_range": {"min": 2.0, "max": 3.0},
+            "memory": {"min": 15, "max": 25},
+            "depth_tolerance_range": {"min": 5, "max": 15}
         }
     },
     "cv1": {
@@ -73,16 +73,16 @@ default_species = {
         "color": 0,
         "rgb": hsv2rgb(0, 1, 1),
         "genome": {
-            "speed": {"min": 2.0, "max": 4.0},  # Carnivores generally faster
+            "speed": {"min": 2.0, "max": 4.0},
             "health": {"min": 60.0, "max": 110.0},
-            "stomach_size": {"min": 80.0, "max": 120.0},  # Moderate stomach size
-            "armor": {"min": 2.0, "max": 7.0},  # Moderate armor
-            "bite_damage": {"min": 20.0, "max": 40.0},  # Higher bite damage for carnivores
-            "eyesight_range": {"min": 10.0, "max": 50.0},  # Good eyesight
-            "feed_range": {"min": 2.0, "max": 3.0},  # Moderate feeding range
-            "bite_range": {"min": 2.0, "max": 4.0},  # Moderate bite range
-            "memory": {"min": 10, "max": 20},  # Moderate memory
-            "depth_tolerance_range": {"min": 5, "max": 15}  # Moderate depth tolerance
+            "stomach_size": {"min": 80.0, "max": 120.0},
+            "armor": {"min": 2.0, "max": 7.0},
+            "bite_damage": {"min": 20.0, "max": 40.0},
+            "eyesight_range": {"min": 10.0, "max": 50.0},
+            "feed_range": {"min": 2.0, "max": 3.0},
+            "bite_range": {"min": 2.0, "max": 4.0},
+            "memory": {"min": 10, "max": 20},
+            "depth_tolerance_range": {"min": 5, "max": 15}
         }
     },
     "n_p": {
@@ -92,16 +92,16 @@ default_species = {
         "color": 150,
         "rgb": hsv2rgb(150, 1, 1),
         "genome": {
-            "speed": {"min": 3.0, "max": 10.0},  # Very fast
-            "health": {"min": 580.0, "max": 1150.0},  # High health
-            "stomach_size": {"min": 120.0, "max": 200.0},  # Large stomach size
-            "armor": {"min": 5.0, "max": 10.0},  # High armor
-            "bite_damage": {"min": 40.0, "max": 70.0},  # Very high bite damage
-            "eyesight_range": {"min": 30.0, "max": 70.0},  # Excellent eyesight
-            "feed_range": {"min": 1.0, "max": 2.0},  # Short feeding range (aggressive)
-            "bite_range": {"min": 3.0, "max": 5.0},  # High bite range
-            "memory": {"min": 20, "max": 30},  # High memory
-            "depth_tolerance_range": {"min": 3, "max": 10}  # Narrow depth tolerance (specialization)
+            "speed": {"min": 3.0, "max": 10.0},
+            "health": {"min": 580.0, "max": 1150.0},
+            "stomach_size": {"min": 120.0, "max": 200.0},
+            "armor": {"min": 5.0, "max": 10.0},
+            "bite_damage": {"min": 40.0, "max": 70.0},
+            "eyesight_range": {"min": 30.0, "max": 70.0},
+            "feed_range": {"min": 1.0, "max": 2.0},
+            "bite_range": {"min": 3.0, "max": 5.0},
+            "memory": {"min": 20, "max": 30},
+            "depth_tolerance_range": {"min": 3, "max": 10}
         }
     },
 }
@@ -109,6 +109,17 @@ default_species = {
 
 class Ecosystem:
     def __init__(self, render_mode, params=default_params, species=default_species, image_path="", debug=False):
+        """
+        Initializes the Ecosystem class, setting up the environment, parameters, species, and map for the simulation. 
+        It also prepares visualization tools if the simulation is run in render mode.
+
+        Parameters:
+        - render_mode: Specifies the rendering mode ("human" for visual output or None for non-visual simulation).
+        - params: Dictionary containing global parameters for the simulation, such as map size, plant growth rates, and movement costs.
+        - species: Dictionary defining the attributes and characteristics of different species in the ecosystem.
+        - image_path: Path to the depth map image used for simulating the environment's depth distribution.
+        - debug: Boolean flag to enable or disable debug mode.
+        """
         self.render_mode = render_mode
         self.debug = debug
         self.params = {
@@ -190,8 +201,6 @@ class Ecosystem:
             self.screen = pygame.display.set_mode((self.window_size, self.window_size))
             pygame.display.set_caption("Ecosystem Simulation")
             self.clock = pygame.time.Clock()
-            # self.population_history = {species: [] for species in self.species.keys()}
-            # self.graph_surface = None
 
             self.window_width = 800
             self.simulation_height = 800
@@ -208,7 +217,10 @@ class Ecosystem:
         self.max_history_length = 200
         self.save_frequency = 200
 
-    def reset(self, seed=None, options=None):
+    def reset(self):
+        """
+        Resets the ecosystem to its initial state, regenerating the map, agents, and plants.
+        """
         self.agentNames = copy(self.possible_agents)
         self.timestep = 0
         self.map = np.zeros(self.mapsize)
@@ -224,6 +236,10 @@ class Ecosystem:
         return
 
     def render(self):
+        """
+        Renders the simulation environment using Pygame. Draws the map, agents, plants, and other visual elements.
+        Displays agents as colored circles, plants as green dots, and a population graph at the bottom of the screen.
+        """
         self.screen.fill((0, 0, 0))
         self.map_surface = pygame.Surface(self.mapsize)
         if len(self.display_map.shape) == 2:
@@ -285,15 +301,20 @@ class Ecosystem:
         self.draw_population_graph()
         pygame.display.flip()
 
-
-
     def close(self):
+        """
+        Ends the simulation by closing the Pygame rendering window, releasing resources, and marking the simulation as finished.
+        """
         print(f"Closing environment Ecosystem at {self.timestep} timestep.")
         pygame.quit()
         self.finished = True
         return self.full_population_history
 
     def stepper(self):
+        """
+        Advances the simulation by one timestep. Agents take actions (e.g., move, eat, breed), plants grow, and visualization is updated if enabled. 
+        It also tracks and logs the state of agents and plants for analysis.
+        """
         if self.render_mode == "human":
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -337,12 +358,14 @@ class Ecosystem:
         self.timestep += 1
 
     def save_and_clear_history(self):
-        # Save entire agent history to a new JSON file
+        """
+        Saves the historical data of agents and plants to JSON files for analysis, and then clears the in-memory history buffers 
+        to make space for new data.
+        """
         agent_file_path = os.path.join(
             self.history_dir, f"agenthistory{self.agent_file_counter}.json"
         )
         with open(agent_file_path, 'w') as agent_file:
-            # Use `to_dict` to serialize agents
             json.dump(
                 [
                     {agent_id: agent.to_dict() for agent_id, agent in agents.items()}
@@ -352,20 +375,21 @@ class Ecosystem:
             )
         self.agent_file_counter += 1
 
-        # Save entire plant history to a new JSON file
         plant_file_path = os.path.join(
             self.history_dir, f"planthistory{self.plant_file_counter}.json"
         )
         with open(plant_file_path, 'w') as plant_file:
-            # Dump the entire plant history in one go
             json.dump(self.plant_history, plant_file)
         self.plant_file_counter += 1
 
-        # Clear in-memory history
         self.agent_history.clear()
         self.plant_history.clear()
 
     def draw_population_graph(self):
+        """
+        Draws a population graph showing the population trends of all species over time. The graph is displayed below the simulation 
+        in the Pygame window.
+        """
         pygame.draw.rect(
             self.screen,
             (50, 50, 50),
@@ -408,12 +432,8 @@ class Ecosystem:
 
     def updatePlants(self):
         """
-        ## Changes start
-        # For each plant, increase growth_percentage, decrement spread timer,
-        # and if conditions are met, spread.
-        # Agents will use self.params["food_value"] * growth_percentage to get
-        # the actual "food" when they eat (handled in Agent class).
-        ## Changes end
+        Updates the growth status of plants in the simulation. Plants grow at a defined rate and may spread to nearby locations 
+        based on growth and timing conditions.
         """
         plant_percentage = len(self.foods) / self.params["starting_plant_population"]
         if plant_percentage < self.params["minimum_plant_percentage"]:
@@ -437,6 +457,10 @@ class Ecosystem:
 
 
     def update_population_graph(self):
+        """
+        Generates a matplotlib graph that shows population trends for all species in the simulation. Converts the graph into a Pygame 
+        surface for display in the simulation window.
+        """
         fig, ax = plt.subplots(figsize=(4, 3))
         for species, history in self.population_history.items():
             ax.plot(history, label=self.species[species]["name"])
@@ -457,7 +481,10 @@ class Ecosystem:
         self.graph_surface = pygame.transform.scale(image, (400, 300))
 
     def partitionDepthMap(self):
-        """Partition the map into chunks and compute min and max depth for each chunk."""
+        """
+        Partitions the depth map into smaller chunks and calculates the minimum and maximum depths for each chunk. This improves 
+        efficiency for ray-cast operations.
+        """
         chunk_size = self.mapsize[0] // self.depth_partition_precision
         self.chunk_min_depth = []
         self.chunk_max_depth = []
@@ -473,7 +500,16 @@ class Ecosystem:
             self.chunk_max_depth.append(max_row)
 
     def getChunkDepth(self, x, y):
-        """Get the min and max depth of the chunk containing (x, y)."""
+        """
+        Retrieves the minimum and maximum depths of the chunk containing the specified coordinates.
+
+        Parameters:
+        - x: The x-coordinate on the map.
+        - y: The y-coordinate on the map.
+
+        Returns:
+        - Tuple: Minimum and maximum depth of the chunk.
+        """
         chunk_size = self.mapsize[0] // self.depth_partition_precision
         chunk_x = x // chunk_size
         chunk_y = y // chunk_size
@@ -488,7 +524,16 @@ class Ecosystem:
             raise ValueError("Coordinates out of bounds!")
 
     def getNeighboringChunkDepths(self, x, y):
-        """Get the min and max depths of neighboring chunks around the chunk containing (x, y)."""
+        """
+        Retrieves the minimum and maximum depths of the chunks neighboring the chunk that contains the specified coordinates.
+
+        Parameters:
+        - x: The x-coordinate on the map.
+        - y: The y-coordinate on the map.
+
+        Returns:
+        - List of tuples: Minimum and maximum depths of neighboring chunks.
+        """
         chunk_size = self.mapsize[0] // self.depth_partition_precision
         chunk_x = x // chunk_size
         chunk_y = y // chunk_size
@@ -505,11 +550,19 @@ class Ecosystem:
                     )
         return neighbors
 
-    ############################################################################################################
-
     def cstCoord(
         self, x, y
     ):
+        """
+        Constrains the given coordinates to ensure they are within the bounds of the map.
+
+        Parameters:
+        - x: The x-coordinate to constrain.
+        - y: The y-coordinate to constrain.
+
+        Returns:
+        - Tuple: Constrained x and y coordinates.
+        """
         if x > self.mapsize[0] - 1:
             x = self.mapsize[0] - 1
         elif x < 0:
@@ -520,15 +573,26 @@ class Ecosystem:
             y = 0
         return x, y
 
-    ############################################################################################################
-
     def gridRInt(self, xy):
+        """
+        Generates a random integer coordinate for either the x or y axis, constrained to the map's size.
+
+        Parameters:
+        - xy: A string indicating whether to generate a coordinate for "x" or "y".
+
+        Returns:
+        - Float: Random coordinate within the map's bounds.
+        """
         if xy == "y":
             return float(random.randint(0, self.mapsize[0] - 1))
         else:
             return float(random.randint(0, self.mapsize[1] - 1))
 
     def generateMap(self):
+        """
+        Generates the depth map and initializes the plants and agents in the simulation. The map is based on a grayscale depth image, 
+        with depth values scaled to the specified range.
+        """
         scaling_factor = (self.max_depth - self.min_depth) / 255.0
         self.map = ((255 - self.display_map) * scaling_factor + self.min_depth).astype(np.int16)
         self.chunk_min_depth = []
@@ -549,17 +613,18 @@ class Ecosystem:
             )
             self.createNewAgent(x, y, depth, agentID, False, genome=genome)
 
-    ############################################################################################################
-
     def generateNewFood(self, multiplier=1.0):
         """
         Spawns self.params["starting_plant_population"] plants (global limit).
         One-third of them at a random initial growth percentage, the remaining
         two-thirds at full (1.0) growth.
         We stop spawning if we reach or exceed self.params["max_plants_global"].
+
+        Parameters:
+        - multiplier: A scaling factor for the number of plants to spawn.
         """
         total_plants = int(self.params["starting_plant_population"] * multiplier)
-        threshold = total_plants // 3  # One-third
+        threshold = total_plants // 3
 
         for i in range(total_plants):
             if len(self.foods) >= self.params["max_plants_global"]:
@@ -577,12 +642,13 @@ class Ecosystem:
 
             self.foods.append([x, y, depth_point, initial_growth, spread_timer])
 
-
     def spreadPlants(self, px, py):
         """
-        Attempts to spawn self.params["plant_spread_amount"] new plants
-        around (px, py), each with 0 growth initially. Respects the global
-        maximum (max_plants_global).
+        Spreads plants around a specified location within a defined radius. New plants are spawned with initial growth set to zero.
+
+        Parameters:
+        - px: The x-coordinate of the parent plant.
+        - py: The y-coordinate of the parent plant.
         """
         for _ in range(self.params["plant_spread_amount"]):
             if len(self.foods) >= self.params["max_plants_global"]:
@@ -602,9 +668,19 @@ class Ecosystem:
                     self.params["plant_spread_interval"]
                 ])
 
-    ############################################################################################################
-
     def createNewAgent(self, x, y, d, agentID, is_new, genome=default_genome):
+        """
+        Creates a new agent in the simulation with specified properties and adds it to the ecosystem. The agent's genome can 
+        be provided or generated randomly.
+
+        Parameters:
+        - x: The x-coordinate of the agent's position.
+        - y: The y-coordinate of the agent's position.
+        - d: The depth at which the agent spawns.
+        - agentID: A unique identifier for the agent.
+        - is_new: Boolean indicating whether the agent is newly created or generated from the start.
+        - genome: A dictionary defining the agent's genetic attributes.
+        """
         life_start = 0
         if is_new or agentID not in self.agentNames:
             life_start = np.random.uniform(0.1, 0.5)
@@ -616,6 +692,15 @@ class Ecosystem:
         )
 
     def RandomGenome(self, species):
+        """
+        Generates a randomized genome for a specified species based on predefined ranges for each genetic attribute.
+
+        Parameters:
+        - species: The species for which to generate the genome.
+
+        Returns:
+        - Dictionary: A genome with randomized values for the species' attributes.
+        """
         genome_ranges = self.species[species].get("genome", {}) 
 
         return {
@@ -670,11 +755,13 @@ class Ecosystem:
             ),
         }
 
-    ############################################################################################################
-
     def KillAgent(self, agentID, reason="unknown"):
         """
-        Removes an agent from the simulation and logs its cause of death/timestep.
+        Removes an agent from the simulation and logs the reason for its death along with the current timestep.
+
+        Parameters:
+        - agentID: The unique identifier of the agent to remove.
+        - reason: The cause of the agent's death (default is "unknown").
         """
         if agentID in self.agents:
             self.death_log[agentID] = {

@@ -133,16 +133,18 @@ The next sections will delve deeper into how we built, tested, and analyzed thes
 
 We developed this simulation by **adapting** an existing **Multi-Agent Reinforcement Learning (MARL) ecosystem** (built with PettingZoo) into a **pure agent-based** simulation. Instead of learning policies, each fish now follows simple decision rules for movement, feeding, breeding, and so forth.
 
-One of our major tasks was restructuring the environment to directly run agent logic each step: rather than agents learning from rewards, they behave according to species-defined stats (speed, bite range, memory, etc.). Because we also introduced multiple species (herbivores, carnivores, omnivores, and an invasive type) on a large agent population the code became performance-heavy . Each timestep, we run line-of-sight checks and update plant growth across potentially thousands of cells—scaling up quickly with bigger maps and populations.
+One of our major tasks was restructuring the environment to directly run agent logic each step: rather than agents learning from rewards, they behave according to species-defined stats (speed, bite range, memory, etc.) and very complex agent algorithms, which require tons of calculations. Because we also introduced multiple species (herbivores, carnivores, omnivores, and an invasive type) on a large agent population the code became performance-heavy . Each timestep, we run line-of-sight checks and update plant growth across potentially thousands of cells—scaling up quickly with bigger maps and populations.
 
 Despite these overheads, the final simulation can handle: 
 
-1. A large or very detailed map (e.g., 1200×1200),
+1. A large or very detailed map (e.g., 3000×3000),
 2. Complex interactions among many agents,
 3. Plant growth/spreading (with performance driven limit),
 4. Depth constraints ensuring fish remain in valid water depths.
 
 Overall, our focus was ensuring realistic agent-based dynamics—where each fish has intuitive actions—while wrestling with the cost of repeated distance calculations and update loops. The outcome is a flexible simulation platform for exploring how an ecosystem with multiple feeding strategies, including an invasive species, might unfold.
+
+The biggest issue lies in validation with real world data - there are not many papers describing the simulated question in numbers. We based our simulation on the introduction of Nile Perch into Lake Victoria, and the simulation does make use of Lake Victoria's seabed. There are no papers that accurately describe the populations or actual properties of fish in question, the problem is also incredibly complex so this simulation is considerably simplified compared to the real events that occured. The papers also focused much more on the impact of the event on the local human population instead of specifying how the dynamics of the introduction of Nile Perch worked. This sadly means that our code cannot be validated against any papers and should be treated as more of a simulation of what impacts would changes have instead of a direct reconstruction of events.
 
 ---
 
